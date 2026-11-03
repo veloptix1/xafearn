@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-export const dynamic = 'force-dynamic'
 
 async function CatalogueContent() {
   const supabase = await createClient()
