@@ -9,12 +9,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [loading, setLoading] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
   
-  // Pour la diffusion
   const [trackingId] = useState(() => submission?.tracking_id || Math.random().toString(36).substring(2, 10))
   const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${trackingId}` : ''
   const messageText = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 Contactez-nous ici : ${trackingUrl}`
 
-  // Pour la vérification
   const [proofType, setProofType] = useState<'video' | 'qr_code' | null>(null)
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -45,7 +43,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     document.body.removeChild(link)
   }
 
-  // Étape 1 : Enregistrer la publication
   const handlePublish = async () => {
     setLoading(true)
     const { error } = await supabase.from('ad_submissions').insert({
@@ -65,7 +62,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     router.refresh()
   }
 
-  // Étape 2 : Envoyer la preuve (Vidéo ou QR Code)
   const handleVerifySubmit = async () => {
     if (proofType === 'video' && !videoFile) {
       showToast('Veuillez sélectionner une vidéo.')
@@ -88,12 +84,12 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
       const { data } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
       proofUrl = data.publicUrl
     } else if (proofType === 'qr_code') {
-      // Générer un token unique pour le scan
       qrToken = `qr_${Math.random().toString(36).substring(2, 10)}`
     }
 
+    // ON GARDE LE STATUT 'pending' POUR QUE L'ADMIN VALIDE
     const { error } = await supabase.from('ad_submissions').update({
-      status: 'validated', // On passe direct en validé pour l'exemple, sinon 'pending_review'
+      status: 'pending', 
       proof_type: proofType,
       proof_video_url: proofUrl,
       qr_scan_token: qrToken
@@ -107,11 +103,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
     setUploading(false)
     setIsOpen(false)
-    showToast('Preuve envoyée avec succès !')
+    showToast('Preuve envoyée ! En attente de validation par l\'admin.')
     router.refresh()
   }
 
-  // Bouton affiché sur la carte (Diffuser ou Vérifier)
   const isDiffused = !!submission
 
   return (
@@ -142,7 +137,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
             </div>
 
             <div className="p-5 overflow-y-auto">
-              {/* --- ETAPE 1 : DIFFUSION --- */}
               {step === 'details' && (
                 <div className="space-y-6">
                   <div>
@@ -172,16 +166,14 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                 </div>
               )}
 
-              {/* --- ETAPE 2 : VÉRIFICATION --- */}
               {step === 'verify' && (
                 <div className="space-y-6">
                   <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl text-sm text-amber-800">
                     <p className="font-bold mb-1">Preuve de publication requise</p>
-                    <p>Pour valider vos gains, nous avons besoin de vérifier que vous avez bien publié l'annonce.</p>
+                    <p>L'admin va vérifier votre preuve. Vous recevrez vos gains une fois validés.</p>
                   </div>
 
                   <div className="space-y-3">
-                    {/* Option Vidéo */}
                     <label className={`block border-2 rounded-xl p-4 cursor-pointer transition ${proofType === 'video' ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:border-sky-300'}`}>
                       <div className="flex items-center gap-3">
                         <input type="radio" name="proof" checked={proofType === 'video'} onChange={() => setProofType('video')} className="w-4 h-4 text-sky-500 accent-sky-500" />
@@ -197,7 +189,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                       )}
                     </label>
 
-                    {/* Option QR Code */}
                     <label className={`block border-2 rounded-xl p-4 cursor-pointer transition ${proofType === 'qr_code' ? 'border-sky-500 bg-sky-50' : 'border-slate-200 hover:border-sky-300'}`}>
                       <div className="flex items-center gap-3">
                         <input type="radio" name="proof" checked={proofType === 'qr_code'} onChange={() => setProofType('qr_code')} className="w-4 h-4 text-sky-500 accent-sky-500" />
