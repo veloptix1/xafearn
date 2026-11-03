@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-async function TrackLogic({ id }: { id: string }) {
+async function TrackLogic({ paramsPromise }: { paramsPromise: Promise<{ id: string }> }) {
+  // On attend les params ICI, à l'intérieur du composant enveloppé dans Suspense
+  const { id } = await paramsPromise
   const supabase = await createClient()
   
   const { data: submission } = await supabase
@@ -30,9 +32,7 @@ async function TrackLogic({ id }: { id: string }) {
   redirect(`https://wa.me/${whatsapp}?text=${message}`)
 }
 
-export default async function TrackPage({ params }: { params: Promise<{ id: string }> }) {
-  const resolvedParams = await params
-
+export default function TrackPage({ params }: { params: Promise<{ id: string }> }) {
   return (
     <Suspense fallback={
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
@@ -40,7 +40,8 @@ export default async function TrackPage({ params }: { params: Promise<{ id: stri
         <p className="text-slate-500 font-medium">Redirection en cours...</p>
       </div>
     }>
-      <TrackLogic id={resolvedParams.id} />
+      {/* On passe la promesse directement au composant enfant */}
+      <TrackLogic paramsPromise={params} />
     </Suspense>
   )
 }
