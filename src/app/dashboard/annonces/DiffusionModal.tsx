@@ -87,7 +87,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
       qrToken = `qr_${Math.random().toString(36).substring(2, 10)}`
     }
 
-    // ON GARDE LE STATUT 'pending' POUR QUE L'ADMIN VALIDE
     const { error } = await supabase.from('ad_submissions').update({
       status: 'pending', 
       proof_type: proofType,
@@ -103,18 +102,40 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
     setUploading(false)
     setIsOpen(false)
-    showToast('Preuve envoyée ! En attente de validation par l\'admin.')
+    showToast('Preuve envoyée ! En attente de validation.')
     router.refresh()
   }
 
+  // --- LOGIQUE DES BOUTONS ---
   const isDiffused = !!submission
+  const isPending = submission?.status === 'pending'
+  const isValidated = submission?.status === 'validated'
+  const isRejected = submission?.status === 'rejected'
+
+  if (isValidated) {
+    return (
+      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex justify-center items-center gap-2">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+        Déjà publié & Payé
+      </div>
+    )
+  }
+
+  if (isPending) {
+    return (
+      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex justify-center items-center gap-2">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        En attente de validation
+      </div>
+    )
+  }
 
   return (
     <>
       <button 
         onClick={() => { setIsOpen(true); setStep(isDiffused ? 'verify' : 'details') }}
         className={`w-full py-2.5 text-sm font-bold rounded-xl transition ${
-          isDiffused ? 'bg-amber-100 text-amber-700 hover:bg-amber-200 border border-amber-200' : 'bg-slate-900 text-white hover:bg-slate-800'
+          isDiffused ? 'bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-100' : 'bg-slate-900 text-white hover:bg-slate-800'
         }`}
       >
         {isDiffused ? 'Vérifier l\'annonce' : 'Diffuser cette annonce'}
