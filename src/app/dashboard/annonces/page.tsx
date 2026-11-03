@@ -11,11 +11,18 @@ async function CatalogueContent() {
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
+  // Récupérer les campagnes
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
     .eq('status', 'active')
     .order('created_at', { ascending: false })
+
+  // Récupérer les soumissions de l'utilisateur pour ces campagnes
+  const { data: submissions } = await supabase
+    .from('ad_submissions')
+    .select('*')
+    .eq('user_id', user.id)
 
   return (
     <>
@@ -29,7 +36,7 @@ async function CatalogueContent() {
 
       {profile?.is_test_mode && (
         <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-6 flex gap-3">
-          <div className="text-amber-500">
+          <div className="text-amber-500 shrink-0">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
           <div>
@@ -45,27 +52,31 @@ async function CatalogueContent() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {campaigns.map((campaign) => (
-            <div key={campaign.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
-              {campaign.image_url && (
-                <div className="h-40 w-full bg-slate-100 relative">
-                  <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" />
-                  <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-slate-900 shadow-sm">
-                    {campaign.views_purchased?.toLocaleString('fr-FR')} vues
+          {campaigns.map((campaign) => {
+            // Vérifier si l'utilisateur a déjà diffusé cette campagne
+            const userSubmission = submissions?.find(s => s.campaign_id === campaign.id)
+            return (
+              <div key={campaign.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden flex flex-col hover:shadow-md transition">
+                {campaign.image_url && (
+                  <div className="h-40 w-full bg-slate-100 relative">
+                    <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" />
+                    <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-slate-900 shadow-sm">
+                      {campaign.views_purchased?.toLocaleString('fr-FR')} vues
+                    </div>
                   </div>
+                )}
+                <div className="p-4 flex-1 flex flex-col">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold text-slate-900 line-clamp-1">{campaign.title}</h3>
+                    {campaign.price > 0 && <span className="font-black text-emerald-600 whitespace-nowrap ml-2">{campaign.price} F</span>}
+                  </div>
+                  <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{campaign.description}</p>
+                  
+                  <DiffusionModal campaign={campaign} userId={user.id} submission={userSubmission} />
                 </div>
-              )}
-              <div className="p-4 flex-1 flex flex-col">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold text-slate-900 line-clamp-1">{campaign.title}</h3>
-                  {campaign.price > 0 && <span className="font-black text-emerald-600 whitespace-nowrap ml-2">{campaign.price} F</span>}
-                </div>
-                <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{campaign.description}</p>
-                
-                <DiffusionModal campaign={campaign} userId={user.id} />
               </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       )}
     </>
