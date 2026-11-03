@@ -16,10 +16,10 @@ export default function ProfilClient({ profile }: { profile: any }) {
     { icon: 'mail', label: 'Modifier mon email', href: '/dashboard/profil/email', color: 'text-sky-500', bg: 'bg-sky-50' },
     { icon: 'phone', label: 'Changer le numéro de téléphone', href: '/dashboard/profil/telephone', color: 'text-sky-500', bg: 'bg-sky-50' },
     { icon: 'lock', label: 'Modifier mon mot de passe', href: '/dashboard/profil/mot-de-passe', color: 'text-slate-700', bg: 'bg-slate-100' },
-    { icon: 'bell', label: 'Notifications', action: handleComingSoon, color: 'text-slate-700', bg: 'bg-slate-100' },
-    { icon: 'wallet', label: 'Mes transactions', action: handleComingSoon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-    { icon: 'shield', label: 'Sécurité & Confidentialité', action: handleComingSoon, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { icon: 'help', label: 'Aide & Support', action: handleComingSoon, color: 'text-slate-700', bg: 'bg-slate-100' },
+    { icon: 'bell', label: 'Notifications', href: '/dashboard/profil/notifications', color: 'text-slate-700', bg: 'bg-slate-100' },
+    { icon: 'wallet', label: 'Mes transactions', href: '/dashboard/profil/transactions', color: 'text-emerald-600', bg: 'bg-emerald-50' },
+    { icon: 'shield', label: 'Sécurité & Confidentialité', href: '/dashboard/profil/securite', color: 'text-amber-600', bg: 'bg-amber-50' },
+    { icon: 'help', label: 'Aide & Support', href: '/dashboard/profil/support', color: 'text-slate-700', bg: 'bg-slate-100' },
   ]
 
   const getIcon = (name: string) => {
