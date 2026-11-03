@@ -11,11 +11,16 @@ async function DashboardContent() {
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
 
+  if (profile && !profile.is_onboarded) {
+    redirect('/onboarding')
+  }
+
   return (
     <>
       <h1 className="text-3xl font-bold mb-1 text-white">Bonjour, {profile?.full_name?.split(' ')[0] || 'Utilisateur'} 👋</h1>
       <p className="text-slate-400 mb-8 flex items-center gap-2">
         Statut : <span className="text-cyan-400 bg-cyan-400/10 px-2 py-0.5 rounded text-sm font-semibold capitalize border border-cyan-400/20">{profile?.role}</span>
+        {profile?.city && <span className="text-slate-500 text-sm">📍 {profile.city}, {profile.neighborhood}</span>}
       </p>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
