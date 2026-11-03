@@ -4,9 +4,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col bg-slate-50">
       <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-        <div className="text-2xl font-black tracking-tighter text-slate-900">
-          XAF<span className="text-sky-500">ERAN</span>
-        </div>
+        <img src="/logo.png" alt="XAFERAN" className="h-8 w-auto object-contain" />
         <div className="flex gap-3">
           <Link href="/login" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
             Connexion
@@ -23,7 +21,7 @@ export default function Home() {
         </div>
         <h1 className="text-5xl md:text-7xl font-black mb-6 leading-tight tracking-tight text-slate-900">
           Ton statut,<br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-blue-600">
+          <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-500 to-emerald-500">
             tes gains.
           </span>
         </h1>

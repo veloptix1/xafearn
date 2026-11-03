@@ -29,8 +29,8 @@ export default function LoginPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
       <div className="w-full max-w-md bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
-        <Link href="/" className="block text-center text-2xl font-black mb-8 text-slate-900">
-          XAF<span className="text-sky-500">ERAN</span>
+        <Link href="/" className="block text-center mb-8">
+          <img src="/logo.png" alt="XAFERAN" className="h-10 w-auto object-contain mx-auto" />
         </Link>
         
         <form onSubmit={handleLogin} className="space-y-5">

@@ -87,16 +87,16 @@ export default function SignupPage() {
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
       <div className="w-full max-w-md bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
-        <Link href="/" className="block text-center text-2xl font-black mb-8 text-slate-900">
-          XAF<span className="text-sky-500">ERAN</span>
+        <Link href="/" className="block text-center mb-8">
+          <img src="/logo.png" alt="XAFERAN" className="h-10 w-auto object-contain mx-auto" />
         </Link>
         
         <form onSubmit={handleSignup} className="space-y-4">
           <div>
-            <input type="text" required placeholder="Nom complet" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
+            <input type="text" required placeholder="Nom complet" value={fullName} onChange={e => setFullName(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
           </div>
           <div>
-            <input type="email" required placeholder="Adresse email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
+            <input type="email" required placeholder="Adresse email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
           </div>
 
           <div className="flex flex-col gap-1">
@@ -126,7 +126,7 @@ export default function SignupPage() {
           </div>
 
           <div>
-            <input type="password" required placeholder="Mot de passe" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
+            <input type="password" required placeholder="Mot de passe" value={password} onChange={e => setPassword(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
           </div>
 
           <label className="flex items-start gap-3 cursor-pointer pt-2">
