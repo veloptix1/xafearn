@@ -77,7 +77,7 @@ export default function SignupPage() {
     return (
       <main className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
         <div className="text-center bg-white border border-slate-200 p-10 rounded-3xl max-w-md shadow-sm">
-          <h2 className="text-2xl font-bold mb-4 text-sky-500">Vérifie tes emails</h2>
+          <h2 className="text-2xl font-bold mb-4 text-emerald-500">Vérifie tes emails</h2>
           <p className="text-slate-500">Un lien de confirmation a été envoyé à <span className="text-slate-900 font-medium">{email}</span>.</p>
         </div>
       </main>
@@ -99,7 +99,7 @@ export default function SignupPage() {
             <input type="email" required placeholder="Adresse email" value={email} onChange={e => setEmail(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition text-slate-900 placeholder-slate-400" />
           </div>
 
-          <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <div className="flex gap-2">
               <select
                 value={selectedCountry.code}
@@ -107,7 +107,7 @@ export default function SignupPage() {
                   const country = paysAfrique.find(p => p.code === e.target.value)
                   if (country) setSelectedCountry(country)
                 }}
-                className="w-1/3 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none transition text-slate-900 text-sm"
+                className="w-1/3 p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none transition text-slate-900 text-sm appearance-none"
               >
                 {paysAfrique.map(p => (
                   <option key={p.code} value={p.code}>{p.indicatif}</option>

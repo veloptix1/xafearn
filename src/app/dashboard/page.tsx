@@ -78,10 +78,8 @@ export default function DashboardPage() {
           {profile?.city && <span className="text-slate-400 text-sm bg-slate-100 px-2 py-1 rounded-md border border-slate-200">📍 {profile.city}, {profile.neighborhood}</span>}
         </p>
 
-        {/* VUE DIFFUSEUR */}
         {!isAnnonceurMode && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Carte Solde - Vert WhatsApp */}
             <div className="bg-[#25D366] p-8 rounded-3xl shadow-sm relative overflow-hidden text-white">
               <p className="font-semibold mb-2 text-sm uppercase tracking-wider text-emerald-950/70">Solde disponible</p>
               <div className="flex items-baseline gap-2 mb-6">
@@ -94,7 +92,6 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Carte Niveau - Or / Jaune */}
             <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm flex flex-col justify-center">
               <p className="text-slate-500 font-semibold mb-2 text-sm uppercase tracking-wider">Votre Niveau Actuel</p>
               <div className="flex items-center gap-4 mb-4">
@@ -114,7 +111,6 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* VUE ANNONCEUR */}
         {isAnnonceurMode && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm flex flex-col justify-center">
