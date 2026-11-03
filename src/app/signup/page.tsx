@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { onUserSignup } from './actions'
 
 const paysAfrique = [
   { code: 'CM', nom: 'Cameroun', indicatif: '+237' },
@@ -67,6 +68,9 @@ export default function SignupPage() {
       setError(error.message)
       setLoading(false)
       return
+    }
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user) {
     }
     setSuccess(true)
     setLoading(false)
