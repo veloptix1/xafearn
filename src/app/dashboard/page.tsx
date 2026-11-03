@@ -15,10 +15,7 @@ async function DashboardData() {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Colonne de gauche (Solde + Niveau) */}
       <div className="md:col-span-2 space-y-4">
-        
-        {/* Carte Solde Compacte et Colorée */}
         <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
           <div className="absolute bottom-0 left-0 w-24 h-24 bg-cyan-500/20 rounded-full blur-2xl transform -translate-x-10 translate-y-10"></div>
@@ -47,7 +44,6 @@ async function DashboardData() {
           </div>
         </div>
 
-        {/* Carte Niveau Compacte */}
         <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
@@ -64,7 +60,6 @@ async function DashboardData() {
         </div>
       </div>
 
-      {/* Colonne de droite (Services) */}
       <div className="md:col-span-1 space-y-4">
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1">Services</h2>
         
@@ -73,9 +68,9 @@ async function DashboardData() {
             <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 group-hover:bg-sky-100 transition">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
             </div>
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Diffuser des annonces</h3>
-              <p className="text-xs text-slate-500">Gagne de l'argent par vue</p>
+            <div className="flex-1">
+              <h3 className="font-bold text-slate-900 text-sm">Diffuser / Créer</h3>
+              <p className="text-xs text-slate-500">Gérer mes annonces</p>
             </div>
           </div>
         </Link>
@@ -85,7 +80,7 @@ async function DashboardData() {
             <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-100 transition">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-bold text-slate-900 text-sm">Mon Équipe</h3>
               <p className="text-xs text-slate-500">Gère tes agents</p>
             </div>
@@ -111,17 +106,11 @@ export default function DashboardPage() {
       </header>
       
       <div className="p-4 md:p-8 max-w-5xl mx-auto w-full mt-4">
-        <Suspense fallback={
-          <div className="flex flex-col items-center justify-center py-20">
-            <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div>
-            <p className="text-slate-400 mt-4 text-sm font-medium">Chargement...</p>
-          </div>
-        }>
+        <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
           <DashboardData />
         </Suspense>
       </div>
 
-      {/* Barre de navigation bas (Mobile) */}
       <nav className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 px-6 py-2 flex justify-between items-center z-50 md:hidden">
         <Link href="/dashboard" className="flex flex-col items-center gap-1 text-sky-500">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" /></svg>

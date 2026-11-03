@@ -3,12 +3,13 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
+export const dynamic = 'force-dynamic'
+
 async function CatalogueContent() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // On récupère les campagnes actives
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
@@ -31,7 +32,10 @@ async function CatalogueContent() {
             <svg className="w-8 h-8 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" /></svg>
           </div>
           <h3 className="text-lg font-bold text-slate-900 mb-1">Aucune annonce active</h3>
-          <p className="text-slate-500 text-sm">Les nouvelles campagnes apparaîtront ici dès qu'elles seront validées.</p>
+          <p className="text-slate-500 text-sm mb-6">Les nouvelles campagnes apparaîtront ici dès qu'elles seront validées.</p>
+          <Link href="/dashboard/annonces/creer" className="inline-block px-6 py-3 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 transition">
+            Créer ma première annonce
+          </Link>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -51,12 +55,6 @@ async function CatalogueContent() {
                   {campaign.price > 0 && <span className="font-black text-emerald-600 whitespace-nowrap ml-2">{campaign.price} F</span>}
                 </div>
                 <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{campaign.description}</p>
-                
-                <div className="flex items-center gap-2 text-xs text-slate-500 mb-4">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-                  {campaign.target_city} {campaign.target_neighborhood ? `, ${campaign.target_neighborhood}` : ''}
-                </div>
-
                 <button className="w-full py-2.5 bg-slate-900 text-white text-sm font-bold rounded-xl hover:bg-slate-800 transition">
                   Diffuser cette annonce
                 </button>
