@@ -14,32 +14,39 @@ async function updateCampaignStatus(formData: FormData) {
   revalidatePath('/dashboard/annonces')
 }
 
-async function updateSubmissionStatus(formData: FormData) {
+async function validateSubmission(formData: FormData) {
   'use server'
   const supabase = await createClient()
   const id = formData.get('id') as string
-  const status = formData.get('status') as string
+  const viewsStr = formData.get('views') as string
+  const views = parseInt(viewsStr) || 0
+
+  if (views <= 0) return
+
+  // 1. Récupérer les infos de la soumission et du profil
+  const { data: sub } = await supabase
+    .from('ad_submissions')
+    .select('*, profiles(balance, level)')
+    .eq('id', id)
+    .single()
   
-  if (status === 'validated') {
-    const { data: sub } = await supabase
-      .from('ad_submissions')
-      .select('*, profiles(balance, level), campaigns(views_purchased)')
-      .eq('id', id)
-      .single()
+  if (sub && sub.profiles) {
+    // 2. Calculer le gain en fonction du niveau du diffuseur
+    const gainPerView = sub.profiles.level === 1 ? 0.50 : sub.profiles.level === 2 ? 1.25 : 1.75
+    const totalGain = gainPerView * views
     
-    if (sub && sub.profiles) {
-      // Calcul du gain : on prend le level du profil et le nombre de vues
-      // Niveau 1 = 0.50F, Niveau 2 = 1.25F, Niveau 3 = 1.75F
-      const gainPerView = sub.profiles.level === 1 ? 0.50 : sub.profiles.level === 2 ? 1.25 : 1.75
-      const totalGain = gainPerView * (sub.campaigns?.views_purchased || 1000)
-      
-      await supabase.from('profiles').update({
-        balance: (sub.profiles.balance || 0) + totalGain
-      }).eq('id', sub.user_id)
-    }
+    // 3. Créditer le solde du diffuseur
+    await supabase.from('profiles').update({
+      balance: (sub.profiles.balance || 0) + totalGain
+    }).eq('id', sub.user_id)
+
+    // 4. Mettre à jour la soumission avec le nombre de vues et le statut validé
+    await supabase.from('ad_submissions').update({ 
+      status: 'validated',
+      views_count: views // On enregistre le nombre de vues réelles
+    }).eq('id', id)
   }
 
-  await supabase.from('ad_submissions').update({ status }).eq('id', id)
   revalidatePath('/dashboard/admin')
   revalidatePath('/dashboard')
 }
@@ -52,17 +59,15 @@ async function AdminContent() {
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   if (profile?.role !== 'admin') redirect('/dashboard')
 
-  // Récupérer les campagnes
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*, profiles!fk_campaigns_profiles(full_name, email)')
     .in('status', ['pending', 'active', 'rejected'])
     .order('created_at', { ascending: false })
 
-  // Récupérer les soumissions avec preuve
   const { data: submissions } = await supabase
     .from('ad_submissions')
-    .select('*, profiles(full_name, email, level, balance), campaigns(title)')
+    .select('*, profiles(full_name, email, level, balance), campaigns(title, views_purchased)')
     .order('created_at', { ascending: false })
 
   return (
@@ -143,55 +148,80 @@ async function AdminContent() {
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-4">
-            {submissions.map((s: any) => (
-              <div key={s.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-bold text-slate-900">{s.campaigns?.title}</h3>
-                    <p className="text-xs text-slate-500">Par : {s.profiles?.full_name} ({s.profiles?.email})</p>
-                    <p className="text-xs text-slate-500">Niveau : {s.profiles?.level} | Solde actuel : {s.profiles?.balance} F</p>
+            {submissions.map((s: any) => {
+              const gainPerView = s.profiles?.level === 1 ? 0.50 : s.profiles?.level === 2 ? 1.25 : 1.75
+              
+              return (
+                <div key={s.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-5">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <h3 className="font-bold text-slate-900">{s.campaigns?.title}</h3>
+                      <p className="text-xs text-slate-500">Par : {s.profiles?.full_name} ({s.profiles?.email})</p>
+                      
+                      {/* Affichage clair du niveau et du taux */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="bg-amber-50 text-amber-700 text-xs font-bold px-2 py-1 rounded border border-amber-200">
+                          Niveau {s.profiles?.level}
+                        </span>
+                        <span className="text-xs text-slate-500 font-medium">
+                          Taux : {gainPerView.toFixed(2)} F / vue
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
+                      s.status === 'validated' ? 'bg-emerald-100 text-emerald-700' : 
+                      s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {s.status === 'validated' ? 'Validé' : s.status === 'rejected' ? 'Rejeté' : 'En attente'}
+                    </span>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
-                    s.status === 'validated' ? 'bg-emerald-100 text-emerald-700' : 
-                    s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                  }`}>
-                    {s.status === 'validated' ? 'Validé' : s.status === 'rejected' ? 'Rejeté' : 'En attente'}
-                  </span>
-                </div>
 
-                {/* Aperçu de la preuve */}
-                {s.proof_type === 'video' && s.proof_video_url && (
-                  <video src={s.proof_video_url} controls className="w-full max-h-48 rounded-xl bg-black mb-4" />
-                )}
-                {s.proof_type === 'qr_code' && (
-                  <div className="bg-slate-50 p-3 rounded-xl text-sm text-slate-600 mb-4 font-mono">
-                    Token QR : {s.qr_scan_token || 'Non généré'}
-                  </div>
-                )}
-                {!s.proof_type && (
-                  <div className="bg-slate-50 p-3 rounded-xl text-sm text-slate-600 mb-4">
-                    Preuve en cours d'envoi ou non fournie.
-                  </div>
-                )}
+                  {s.proof_type === 'video' && s.proof_video_url && (
+                    <video src={s.proof_video_url} controls className="w-full max-h-48 rounded-xl bg-black mb-4" />
+                  )}
+                  {s.proof_type === 'qr_code' && (
+                    <div className="bg-slate-50 p-3 rounded-xl text-sm text-slate-600 mb-4 font-mono">
+                      Token QR : {s.qr_scan_token || 'Non généré'}
+                    </div>
+                  )}
 
-                <div className="flex gap-3">
-                  {s.status !== 'validated' && (
-                    <form action={updateSubmissionStatus} className="flex-1">
+                  {/* FORMULAIRE DE VALIDATION MANUELLE */}
+                  {s.status !== 'validated' && s.status !== 'rejected' && (
+                    <form action={validateSubmission} className="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col md:flex-row gap-3 items-end">
                       <input type="hidden" name="id" value={s.id} />
-                      <input type="hidden" name="status" value="validated" />
-                      <button type="submit" className="w-full py-2 bg-emerald-500 text-white font-bold text-sm rounded-xl hover:bg-emerald-400 transition">Valider et Payer</button>
+                      <div className="flex-1 w-full">
+                        <label className="block text-xs font-bold text-slate-700 mb-1">Nombre de vues vérifiées</label>
+                        <input 
+                          type="number" 
+                          name="views" 
+                          required 
+                          defaultValue={s.campaigns?.views_purchased || 1000} 
+                          className="w-full p-2.5 bg-white border border-slate-300 rounded-lg text-sm focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none text-slate-900"
+                        />
+                      </div>
+                      <button type="submit" className="w-full md:w-auto px-6 py-2.5 bg-emerald-500 text-white font-bold text-sm rounded-lg hover:bg-emerald-400 transition">
+                        Valider & Payer
+                      </button>
                     </form>
                   )}
-                  {s.status !== 'rejected' && (
-                    <form action={updateSubmissionStatus} className="flex-1">
+
+                  {/* Bouton Rejeter */}
+                  {s.status !== 'validated' && s.status !== 'rejected' && (
+                    <form action={async (formData) => {
+                      'use server'
+                      const supabase = await createClient()
+                      await supabase.from('ad_submissions').update({ status: 'rejected' }).eq('id', formData.get('id') as string)
+                      revalidatePath('/dashboard/admin')
+                    }} className="mt-2">
                       <input type="hidden" name="id" value={s.id} />
-                      <input type="hidden" name="status" value="rejected" />
-                      <button type="submit" className="w-full py-2 bg-red-50 text-red-600 border border-red-200 font-bold text-sm rounded-xl hover:bg-red-100 transition">Rejeter</button>
+                      <button type="submit" className="w-full py-2 bg-white border border-red-200 text-red-600 font-bold text-sm rounded-xl hover:bg-red-50 transition">
+                        Rejeter la preuve
+                      </button>
                     </form>
                   )}
                 </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
