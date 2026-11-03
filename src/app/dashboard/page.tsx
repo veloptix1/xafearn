@@ -44,7 +44,7 @@ async function DashboardData() {
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between">
+        <Link href="/dashboard/niveaux" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between hover:border-sky-300 hover:shadow-md transition">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
               <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.788l1.599.799L11 4.323V3a1 1 0 011-1zm-5 8.274l-.818 2.552c.25.112.526.174.818.174.292 0 .569-.062.818-.174L5 10.274zm2.5 5.528l-1.5 2.5a1 1 0 001.723 1.016l.802-1.338.803 1.338a1 1 0 001.723-1.015l-1.5-2.5a1 1 0 00-1.723 0zm-2.5-5.528L4 7.632l.818 2.552a1.993 1.993 0 00.818-.174c.292 0 .569-.062.818-.174L4 10.274zM10 20a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
@@ -54,10 +54,13 @@ async function DashboardData() {
               <p className="text-lg font-black text-slate-900">Niveau {profile?.level || 1}</p>
             </div>
           </div>
-          <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
-            {profile?.level === 1 ? '0,50 F/vue' : profile?.level === 2 ? '1,25 F/vue' : '1,75 F/vue'}
-          </span>
-        </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+              {profile?.level === 1 ? '0,50 F/vue' : profile?.level === 2 ? '1,25 F/vue' : '1,75 F/vue'}
+            </span>
+            <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+          </div>
+        </Link>
       </div>
 
       <div className="md:col-span-1 space-y-4">
