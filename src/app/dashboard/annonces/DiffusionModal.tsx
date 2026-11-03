@@ -8,9 +8,12 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [step, setStep] = useState<'details' | 'verify'>('details')
   const [loading, setLoading] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [acceptedWarning, setAcceptedWarning] = useState(false)
   
   const [trackingId] = useState(() => submission?.tracking_id || Math.random().toString(36).substring(2, 10))
   const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${trackingId}` : ''
+  
+  // Le texte est verrouillé et ne doit pas être modifié
   const messageText = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 Contactez-nous ici : ${trackingUrl}`
 
   const [proofType, setProofType] = useState<'video' | 'qr_code' | null>(null)
@@ -27,7 +30,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(messageText)
-    showToast('Texte et lien copiés !')
+    showToast('Texte et lien copiés ! Ne les modifiez pas.')
   }
 
   const handleDownload = async () => {
@@ -44,12 +47,22 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   }
 
   const handlePublish = async () => {
+    if (!acceptedWarning) {
+      showToast('Veuillez cocher la case d\'avertissement.')
+      return
+    }
+
     setLoading(true)
+    
+    // On calcule un hash simple du texte original pour vérification
+    const hash = btoa(encodeURIComponent(messageText)).substring(0, 32)
+
     const { error } = await supabase.from('ad_submissions').insert({
       campaign_id: campaign.id,
       user_id: userId,
       tracking_id: trackingId,
-      status: 'pending'
+      status: 'pending',
+      original_text_hash: hash // On sauvegarde l'empreinte
     })
 
     if (error) {
@@ -106,11 +119,9 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     router.refresh()
   }
 
-  // --- LOGIQUE DES BOUTONS ---
   const isDiffused = !!submission
   const isPending = submission?.status === 'pending'
   const isValidated = submission?.status === 'validated'
-  const isRejected = submission?.status === 'rejected'
 
   if (isValidated) {
     return (
@@ -159,7 +170,18 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
             <div className="p-5 overflow-y-auto">
               {step === 'details' && (
-                <div className="space-y-6">
+                <div className="space-y-5">
+                  {/* AVERTISSEMENT IMPORTANT */}
+                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl flex gap-3">
+                    <div className="text-red-500 shrink-0">
+                      <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+                    </div>
+                    <div>
+                      <p className="font-bold text-red-800 text-sm mb-1">⚠️ Attention à la fraude</p>
+                      <p className="text-red-700 text-xs">Ne modifiez <strong>JAMAIS</strong> le texte ou le lien de suivi. Si l'admin détecte une modification, la vue ne sera pas comptée et vous ne serez pas payé (même pour les annonces test).</p>
+                    </div>
+                  </div>
+
                   <div>
                     <p className="text-sm font-semibold text-slate-900 mb-2">1. Téléchargez l'image</p>
                     <button onClick={handleDownload} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
@@ -167,21 +189,34 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                       Télécharger l'image
                     </button>
                   </div>
+                  
                   <div>
-                    <p className="text-sm font-semibold text-slate-900 mb-2">2. Copiez le texte + lien</p>
-                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm text-slate-600 whitespace-pre-wrap font-mono text-xs mb-3">
+                    <p className="text-sm font-semibold text-slate-900 mb-2">2. Copiez le texte (verrouillé)</p>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-sm text-slate-600 whitespace-pre-wrap font-mono text-xs mb-3 relative">
                       {messageText}
+                      <div className="absolute top-2 right-2 text-slate-400">
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                      </div>
                     </div>
                     <button onClick={handleCopy} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl hover:bg-sky-100 transition flex justify-center items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                       Copier le texte
                     </button>
                   </div>
-                  <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl text-sm text-emerald-800">
-                    <p className="font-bold mb-1">💡 Comment gagner ?</p>
-                    <p>Publiez sur votre statut WhatsApp. Dès que c'est fait, cliquez sur le bouton ci-dessous pour envoyer votre preuve.</p>
-                  </div>
-                  <button onClick={handlePublish} disabled={loading} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition shadow-md">
+
+                  <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-200 rounded-xl bg-slate-50">
+                    <input 
+                      type="checkbox" 
+                      checked={acceptedWarning} 
+                      onChange={e => setAcceptedWarning(e.target.checked)} 
+                      className="mt-1 w-4 h-4 accent-emerald-500" 
+                    />
+                    <span className="text-xs text-slate-700 font-medium">
+                      Je certifie avoir publié l'image et le texte <strong>sans aucune modification</strong>. Je comprends que toute modification annule mes gains.
+                    </span>
+                  </label>
+
+                  <button onClick={handlePublish} disabled={loading || !acceptedWarning} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50 transition shadow-md">
                     {loading ? 'Enregistrement...' : "J'ai publié"}
                   </button>
                 </div>
