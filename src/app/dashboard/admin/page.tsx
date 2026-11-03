@@ -4,7 +4,6 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-
 // Server Action pour changer le statut de la campagne
 async function updateCampaignStatus(formData: FormData) {
   'use server'
@@ -13,6 +12,8 @@ async function updateCampaignStatus(formData: FormData) {
   const status = formData.get('status') as string
 
   await supabase.from('campaigns').update({ status }).eq('id', id)
+  
+  // On force le rafraîchissement des pages
   revalidatePath('/dashboard/admin')
   revalidatePath('/dashboard/annonces')
 }
