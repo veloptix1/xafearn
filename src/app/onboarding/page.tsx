@@ -51,47 +51,47 @@ export default function OnboardingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6">
-      <div className="w-full max-w-lg bg-slate-900 border border-white/5 p-8 rounded-3xl">
+    <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
+      <div className="w-full max-w-lg bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-white mb-2">Finalise ton profil</h1>
-          <p className="text-slate-400 text-sm">Ces informations nous aident à personnaliser ton expérience.</p>
+          <h1 className="text-2xl font-black text-slate-900 mb-2">Finalise ton profil</h1>
+          <p className="text-slate-500 text-sm">Ces informations nous aident à personnaliser ton expérience.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Je suis ici pour...</label>
-            <div className="flex bg-slate-950 p-1 rounded-xl border border-white/5">
-              <button type="button" onClick={() => setRole('diffuseur')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'diffuseur' ? 'bg-cyan-500 text-white' : 'text-slate-400'}`}>Gagner de l'argent</button>
-              <button type="button" onClick={() => setRole('annonceur')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'annonceur' ? 'bg-cyan-500 text-white' : 'text-slate-400'}`}>Lancer des pubs</button>
+            <label className="block text-sm font-medium text-slate-700 mb-2">Je suis ici pour...</label>
+            <div className="flex bg-slate-100 p-1 rounded-xl">
+              <button type="button" onClick={() => setRole('diffuseur')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'diffuseur' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Gagner de l'argent</button>
+              <button type="button" onClick={() => setRole('annonceur')} className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition ${role === 'annonceur' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Lancer des pubs</button>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Ville</label>
-              <input type="text" required value={city} onChange={e => setCity(e.target.value)} placeholder="Ex: Douala" className="w-full p-4 bg-slate-950 border border-white/5 rounded-xl focus:border-cyan-500 outline-none text-white placeholder-slate-600" />
+              <label className="block text-sm font-medium text-slate-700 mb-2">Ville</label>
+              <input type="text" required value={city} onChange={e => setCity(e.target.value)} placeholder="Ex: Douala" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none text-slate-900 placeholder-slate-400" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-2">Quartier</label>
-              <input type="text" required value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Ex: Bonapriso" className="w-full p-4 bg-slate-950 border border-white/5 rounded-xl focus:border-cyan-500 outline-none text-white placeholder-slate-600" />
+              <label className="block text-sm font-medium text-slate-700 mb-2">Quartier</label>
+              <input type="text" required value={neighborhood} onChange={e => setNeighborhood(e.target.value)} placeholder="Ex: Bonapriso" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none text-slate-900 placeholder-slate-400" />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">Numéro WhatsApp</label>
-            <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="Ex: 6 90 00 00 00" className="w-full p-4 bg-slate-950 border border-white/5 rounded-xl focus:border-cyan-500 outline-none text-white placeholder-slate-600" />
+            <label className="block text-sm font-medium text-slate-700 mb-2">Numéro WhatsApp</label>
+            <input type="tel" required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} placeholder="Ex: 6 90 00 00 00" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none text-slate-900 placeholder-slate-400" />
           </div>
 
           {role === 'annonceur' && (
             <>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Nom de ton business</label>
-                <input type="text" required value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Ex: Boutique Élégance" className="w-full p-4 bg-slate-950 border border-white/5 rounded-xl focus:border-cyan-500 outline-none text-white placeholder-slate-600" />
+                <label className="block text-sm font-medium text-slate-700 mb-2">Nom de ton business</label>
+                <input type="text" required value={businessName} onChange={e => setBusinessName(e.target.value)} placeholder="Ex: Boutique Élégance" className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none text-slate-900 placeholder-slate-400" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">Secteur d'activité</label>
-                <select required value={activitySector} onChange={e => setActivitySector(e.target.value)} className="w-full p-4 bg-slate-950 border border-white/5 rounded-xl focus:border-cyan-500 outline-none text-white">
+                <label className="block text-sm font-medium text-slate-700 mb-2">Secteur d'activité</label>
+                <select required value={activitySector} onChange={e => setActivitySector(e.target.value)} className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:border-sky-500 outline-none text-slate-900">
                   <option value="" disabled>Sélectionne un secteur</option>
                   <option value="commerce">Commerce / Boutique</option>
                   <option value="restauration">Restauration / Alimentaire</option>
@@ -106,9 +106,9 @@ export default function OnboardingPage() {
             </>
           )}
 
-          {error && <div className="text-red-400 text-sm text-center bg-red-400/10 py-2 rounded-lg">{error}</div>}
+          {error && <div className="text-red-500 text-sm text-center bg-red-50 border border-red-100 py-2 rounded-lg">{error}</div>}
 
-          <button type="submit" disabled={loading} className="w-full py-4 bg-cyan-500 text-white font-bold rounded-xl hover:bg-cyan-400 disabled:opacity-50 transition">
+          <button type="submit" disabled={loading} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 disabled:opacity-50 transition shadow-sm">
             {loading ? 'Enregistrement...' : 'Terminer'}
           </button>
         </form>
