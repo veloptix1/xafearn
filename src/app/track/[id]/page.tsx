@@ -1,14 +1,16 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
-export default async function TrackPage({ params }: { params: { id: string } }) {
+export default async function TrackPage({ params }: { params: Promise<{ id: string }> }) {
+  // Next.js 16 : on attend la résolution des params
+  const resolvedParams = await params
   const supabase = await createClient()
   
   // On récupère la soumission pour trouver le numéro WhatsApp de l'annonceur
   const { data: submission } = await supabase
     .from('ad_submissions')
     .select('*, campaigns(whatsapp_number, title, user_id)')
-    .eq('tracking_id', params.id)
+    .eq('tracking_id', resolvedParams.id)
     .single()
 
   if (!submission || !submission.campaigns) {
@@ -23,7 +25,7 @@ export default async function TrackPage({ params }: { params: { id: string } }) 
   }
 
   // Incrémenter le nombre de clics (vues)
-  await supabase.rpc('increment_view', { tracking_id_param: params.id })
+  await supabase.rpc('increment_view', { tracking_id_param: resolvedParams.id })
 
   const whatsapp = submission.campaigns.whatsapp_number.replace(/\D/g, '')
   const message = encodeURIComponent(`Bonjour, je vous contacte suite à votre annonce XAFERAN : ${submission.campaigns.title}`)
