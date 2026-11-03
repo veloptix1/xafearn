@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import Link from 'next/link'
+import Link from 'next/link'
 
 export default function ProfilClient({ profile }: { profile: any }) {
   const [showToast, setShowToast] = useState(false)
@@ -11,10 +12,10 @@ export default function ProfilClient({ profile }: { profile: any }) {
   }
 
   const menuItems = [
-    { icon: 'edit', label: 'Modifier le profil', action: handleComingSoon, color: 'text-sky-500', bg: 'bg-sky-50' },
-    { icon: 'mail', label: 'Modifier mon email', action: handleComingSoon, color: 'text-sky-500', bg: 'bg-sky-50' },
-    { icon: 'phone', label: 'Changer le numéro de téléphone', action: handleComingSoon, color: 'text-sky-500', bg: 'bg-sky-50' },
-    { icon: 'lock', label: 'Modifier mon mot de passe', action: handleComingSoon, color: 'text-slate-700', bg: 'bg-slate-100' },
+    { icon: 'edit', label: 'Modifier le profil', href: '/dashboard/profil/modifier', color: 'text-sky-500', bg: 'bg-sky-50' },
+    { icon: 'mail', label: 'Modifier mon email', href: '/dashboard/profil/email', color: 'text-sky-500', bg: 'bg-sky-50' },
+    { icon: 'phone', label: 'Changer le numéro de téléphone', href: '/dashboard/profil/telephone', color: 'text-sky-500', bg: 'bg-sky-50' },
+    { icon: 'lock', label: 'Modifier mon mot de passe', href: '/dashboard/profil/mot-de-passe', color: 'text-slate-700', bg: 'bg-slate-100' },
     { icon: 'bell', label: 'Notifications', action: handleComingSoon, color: 'text-slate-700', bg: 'bg-slate-100' },
     { icon: 'wallet', label: 'Mes transactions', action: handleComingSoon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { icon: 'shield', label: 'Sécurité & Confidentialité', action: handleComingSoon, color: 'text-amber-600', bg: 'bg-amber-50' },
@@ -58,7 +59,7 @@ export default function ProfilClient({ profile }: { profile: any }) {
             </div>
             <button onClick={handleComingSoon} className="px-4 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-full hover:bg-slate-200 transition">
               Modifier
-            </button>
+            </Link>
           </div>
           
           <h1 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Utilisateur'}</h1>
@@ -78,9 +79,9 @@ export default function ProfilClient({ profile }: { profile: any }) {
       {/* Menu des options */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6">
         {menuItems.map((item, index) => (
-          <button 
+          <Link 
             key={index}
-            onClick={item.action}
+            href={item.href || '#'}
             className="w-full flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition text-left"
           >
             <div className="flex items-center gap-4">
@@ -92,7 +93,7 @@ export default function ProfilClient({ profile }: { profile: any }) {
               <span className="font-semibold text-slate-800 text-sm">{item.label}</span>
             </div>
             <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-          </button>
+          </Link>
         ))}
       </div>
 
@@ -101,7 +102,7 @@ export default function ProfilClient({ profile }: { profile: any }) {
         <button type="submit" className="w-full py-4 bg-white border border-red-200 text-red-600 font-bold rounded-2xl hover:bg-red-50 transition flex justify-center items-center gap-2 shadow-sm">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
           Se déconnecter
-        </button>
+        </Link>
       </form>
     </div>
   )
