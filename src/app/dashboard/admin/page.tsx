@@ -77,6 +77,7 @@ async function AdminContent() {
       <div>
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-slate-900">Modération des annonces</h1>
+          <Link href="/dashboard/admin/annonce-test" className="px-4 py-2 bg-sky-500 text-white text-sm font-bold rounded-xl hover:bg-sky-400 transition shadow-sm">Gérer l'annonce test</Link>
           <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full border border-amber-200">Mode Admin</span>
         </div>
 
