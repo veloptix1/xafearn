@@ -1,16 +1,14 @@
 import { redirect } from 'next/navigation'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-export default async function TrackPage({ params }: { params: Promise<{ id: string }> }) {
-  // Next.js 16 : on attend la résolution des params
-  const resolvedParams = await params
+async function TrackLogic({ id }: { id: string }) {
   const supabase = await createClient()
   
-  // On récupère la soumission pour trouver le numéro WhatsApp de l'annonceur
   const { data: submission } = await supabase
     .from('ad_submissions')
     .select('*, campaigns(whatsapp_number, title, user_id)')
-    .eq('tracking_id', resolvedParams.id)
+    .eq('tracking_id', id)
     .single()
 
   if (!submission || !submission.campaigns) {
@@ -24,12 +22,25 @@ export default async function TrackPage({ params }: { params: Promise<{ id: stri
     )
   }
 
-  // Incrémenter le nombre de clics (vues)
-  await supabase.rpc('increment_view', { tracking_id_param: resolvedParams.id })
+  await supabase.rpc('increment_view', { tracking_id_param: id })
 
   const whatsapp = submission.campaigns.whatsapp_number.replace(/\D/g, '')
   const message = encodeURIComponent(`Bonjour, je vous contacte suite à votre annonce XAFERAN : ${submission.campaigns.title}`)
   
-  // Redirection directe vers WhatsApp
   redirect(`https://wa.me/${whatsapp}?text=${message}`)
+}
+
+export default async function TrackPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params
+
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 p-6">
+        <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mb-4"></div>
+        <p className="text-slate-500 font-medium">Redirection en cours...</p>
+      </div>
+    }>
+      <TrackLogic id={resolvedParams.id} />
+    </Suspense>
+  )
 }
