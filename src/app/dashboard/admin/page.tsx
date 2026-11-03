@@ -4,16 +4,12 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
-// Server Action pour changer le statut de la campagne
 async function updateCampaignStatus(formData: FormData) {
   'use server'
   const supabase = await createClient()
   const id = formData.get('id') as string
   const status = formData.get('status') as string
-
   await supabase.from('campaigns').update({ status }).eq('id', id)
-  
-  // On force le rafraîchissement des pages
   revalidatePath('/dashboard/admin')
   revalidatePath('/dashboard/annonces')
 }
@@ -24,25 +20,46 @@ async function AdminContent() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  if (profile?.role !== 'admin') redirect('/dashboard')
+  
+  // Affichage de débogage
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="bg-red-50 border border-red-200 p-6 rounded-2xl">
+        <h2 className="text-red-700 font-bold text-lg mb-2">Accès refusé</h2>
+        <p className="text-red-600">Ton rôle actuel dans la base de données est : <strong>"{profile?.role}"</strong></p>
+        <p className="text-red-600 mt-2">Il devrait être "admin". Va dans Supabase pour le corriger.</p>
+        <p className="text-xs text-red-500 mt-4">Ton ID: {user.id}</p>
+      </div>
+    )
+  }
 
-  // Récupérer les campagnes en attente ET actives
-  const { data: campaigns } = await supabase
+  const { data: campaigns, error } = await supabase
     .from('campaigns')
     .select('*, profiles(full_name, email)')
-    .in('status', ['pending', 'active', 'rejected'])
     .order('created_at', { ascending: false })
+
+  if (error) {
+    return (
+      <div className="bg-red-50 border border-red-200 p-6 rounded-2xl">
+        <h2 className="text-red-700 font-bold text-lg mb-2">Erreur Supabase</h2>
+        <p className="text-red-600 font-mono text-sm">{error.message}</p>
+        <p className="text-red-600 font-mono text-xs mt-2">{error.details}</p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-900">Modération des annonces</h1>
-        <span className="bg-amber-100 text-amber-700 text-xs font-bold px-3 py-1 rounded-full border border-amber-200">Mode Admin</span>
+        <h1 className="text-2xl font-bold text-slate-900">Modération</h1>
+        <span className="bg-emerald-100 text-emerald-700 text-xs font-bold px-3 py-1 rounded-full border border-emerald-200">
+          {campaigns?.length || 0} annonce(s) trouvée(s)
+        </span>
       </div>
 
       {!campaigns || campaigns.length === 0 ? (
         <div className="bg-white border border-slate-200 p-8 rounded-3xl shadow-sm text-center text-slate-500">
-          Aucune annonce à modérer pour le moment.
+          Aucune annonce dans la base de données.
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4">
@@ -59,22 +76,15 @@ async function AdminContent() {
                     <h3 className="font-bold text-lg text-slate-900">{c.title}</h3>
                     <p className="text-xs text-slate-500">Par : {c.profiles?.full_name} ({c.profiles?.email})</p>
                   </div>
-                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase tracking-wider ${
+                  <span className={`px-2 py-1 rounded text-xs font-bold uppercase ${
                     c.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                     c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'
                   }`}>
-                    {c.status === 'pending' ? 'En attente' : c.status === 'active' ? 'En ligne' : 'Rejetée'}
+                    {c.status}
                   </span>
                 </div>
                 
                 <p className="text-sm text-slate-600 mb-4 line-clamp-2">{c.description}</p>
-                
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs text-slate-600 mb-4 bg-slate-50 p-3 rounded-lg">
-                  <div><span className="font-semibold">Prix:</span> {c.price} F</div>
-                  <div><span className="font-semibold">Budget:</span> {c.budget} F</div>
-                  <div><span className="font-semibold">Vues:</span> {c.views_purchased}</div>
-                  <div><span className="font-semibold">Cible:</span> {c.target_city}</div>
-                </div>
 
                 <div className="mt-auto flex gap-3">
                   {c.status !== 'active' && (
@@ -82,7 +92,7 @@ async function AdminContent() {
                       <input type="hidden" name="id" value={c.id} />
                       <input type="hidden" name="status" value="active" />
                       <button type="submit" className="w-full py-2.5 bg-emerald-500 text-white font-bold text-sm rounded-xl hover:bg-emerald-400 transition">
-                        Approuver & Publier
+                        Approuver
                       </button>
                     </form>
                   )}
@@ -114,7 +124,6 @@ export default function AdminPage() {
         </Link>
         <h1 className="text-lg font-bold text-slate-900">Administration</h1>
       </header>
-
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2">
         <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
           <AdminContent />
