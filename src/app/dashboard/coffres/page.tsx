@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import Toast from '@/components/Toast'
 
 export default function TreasuresPage() {
   const supabase = createClient()
@@ -11,7 +12,12 @@ export default function TreasuresPage() {
   const [treasures, setTreasures] = useState<any[]>([])
   const [links, setLinks] = useState<Record<string, any[]>>({})
   const [profile, setProfile] = useState<any>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  
+  // Système de toast professionnel
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setToast({ message, type })
+  }
 
   // État pour le modal de jeu
   const [activeTreasure, setActiveTreasure] = useState<any>(null)
@@ -34,7 +40,6 @@ export default function TreasuresPage() {
         const ids = t.map(x => x.id)
         const { data: l } = await supabase.from('treasure_links').select('*').in('treasure_id', ids)
         
-        // Grouper les liens par treasure_id
         const grouped: Record<string, any[]> = {}
         l?.forEach(link => {
           if (!grouped[link.treasure_id]) grouped[link.treasure_id] = []
@@ -47,10 +52,8 @@ export default function TreasuresPage() {
     load()
   }, [router, supabase])
 
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
-
   const handleClaim = async () => {
-    if (!code) return showToast('Entre le code secret.')
+    if (!code) return showToast('Veuillez entrer le code secret.', 'warning')
     setIsSubmitting(true)
     setWinResult(null)
 
@@ -63,22 +66,29 @@ export default function TreasuresPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        showToast(data.error)
+        showToast(data.error, 'error')
       } else {
         setWinResult(data)
-        // Rafraîchir les données
+        showToast('Félicitations ! Tu as gagné.', 'success')
         setTimeout(() => { setActiveTreasure(null); window.location.reload() }, 5000)
       }
     } catch (err) {
-      showToast('Erreur réseau')
+      showToast('Une erreur est survenue. Veuillez réessayer.', 'error')
     }
     setIsSubmitting(false)
   }
 
-  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Chargement...</div>
+  if (loading) return (
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+      <div className="w-10 h-10 border-4 border-amber-200 border-t-amber-500 rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 font-medium">Chargement des trésors...</p>
+    </div>
+  )
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex items-center gap-4">
         <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -87,15 +97,22 @@ export default function TreasuresPage() {
       </header>
 
       <div className="p-4 md:p-8 max-w-lg mx-auto mt-4 space-y-4">
-        {toast && <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl text-sm font-bold z-[100]">{toast}</div>}
-
+        
         <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-lg mb-6">
           <h2 className="text-xl font-bold mb-2">Trouve le code, gagne le trésor !</h2>
-          <p className="text-amber-100 text-sm">Observe les indices cachés dans les vidéos des annonceurs et sois le premier à ouvrir le coffre.</p>
+          <p className="text-amber-100 text-sm leading-relaxed">
+            Observe les indices cachés dans les vidéos des annonceurs et sois le premier à ouvrir le coffre.
+          </p>
         </div>
 
         {treasures.length === 0 ? (
-          <div className="bg-white p-8 rounded-3xl text-center text-slate-500">Aucun trésor disponible pour le moment.</div>
+          <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center shadow-sm">
+            <div className="w-16 h-16 bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <h3 className="font-bold text-slate-900 mb-1">Aucun trésor disponible</h3>
+            <p className="text-slate-500 text-sm">Reviens plus tard, de nouveaux coffres sont ajoutés régulièrement.</p>
+          </div>
         ) : (
           treasures.map(t => {
             const treasureLinks = links[t.id] || []
