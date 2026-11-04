@@ -22,12 +22,9 @@ async function CatalogueContent() {
     .select('*')
     .eq('user_id', user.id)
 
+  // On s'assure que l'annonce de bienvenue est TOUJOURS en premier si elle existe
   const sortedCampaigns = campaigns?.sort((a, b) => {
-    if (profile?.is_test_mode) {
-      if (a.is_welcome_campaign) return -1
-      if (b.is_welcome_campaign) return 1
-    }
-    return 0
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
   })
 
   return (
