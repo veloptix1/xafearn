@@ -21,8 +21,8 @@ export default function AdminTasksPage() {
   const [reward, setReward] = useState('')
   const [type, setType] = useState('subscribe')
   const [imageUrl, setImageUrl] = useState('')
-  const [isMission, setIsMission] = useState(false)
-  const [missionBudget, setMissionBudget] = useState('')
+  const [durationHours, setDurationHours] = useState('')
+  const [gainPerView, setGainPerView] = useState('')
 
   useEffect(() => {
     loadTasks()
@@ -66,26 +66,39 @@ export default function AdminTasksPage() {
       setTitle(task.title)
       setDescription(task.description)
       setActionUrl(task.action_url)
-      setReward(task.reward.toString())
+      setReward(task.reward?.toString() || '')
       setType(task.type)
       setImageUrl(task.image_url || '')
-      setIsMission(task.is_mission || false)
-      setMissionBudget(task.mission_budget ? task.mission_budget.toString() : '')
+      setDurationHours(task.duration_hours?.toString() || '')
+      setGainPerView(task.gain_per_view?.toString() || '')
     } else {
       setEditingTask(null)
-      setTitle(''); setDescription(''); setActionUrl(''); setReward(''); setType('subscribe'); setImageUrl(''); setIsMission(false); setMissionBudget('')
+      setTitle(''); setDescription(''); setActionUrl(''); setReward(''); setType('subscribe'); setImageUrl(''); setDurationHours(''); setGainPerView('')
     }
     setIsModalOpen(true)
   }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const taskData = { 
-      title, description, action_url: actionUrl, 
-      reward: parseFloat(reward), type, status: 'active', 
-      image_url: imageUrl,
-      is_mission: isMission,
-      mission_budget: isMission ? parseFloat(missionBudget) : null
+    
+    const taskData: any = { 
+      title, 
+      description, 
+      action_url: actionUrl, 
+      type, 
+      status: 'active', 
+      image_url: imageUrl 
+    }
+
+    // Selon le type, on enregistre les bons champs
+    if (type === 'diffusion_duration') {
+      taskData.gain_per_view = parseFloat(gainPerView) || 0
+      taskData.duration_hours = parseInt(durationHours) || 24
+      taskData.reward = 0 // Pas de reward fixe pour les diffusions
+    } else {
+      taskData.reward = parseFloat(reward) || 0
+      taskData.gain_per_view = null
+      taskData.duration_hours = null
     }
 
     if (editingTask) {
@@ -111,7 +124,7 @@ export default function AdminTasksPage() {
     loadTasks()
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>
+  if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center">Chargement...</div>
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
@@ -142,11 +155,15 @@ export default function AdminTasksPage() {
                 <div className="flex items-center gap-2">
                   <h3 className="font-bold text-slate-900">{task.title}</h3>
                   <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${task.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
-                  {task.is_mission && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700">MISSION</span>}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${task.type === 'diffusion_duration' ? 'bg-purple-100 text-purple-700' : 'bg-sky-100 text-sky-700'}`}>
+                    {task.type === 'diffusion_duration' ? 'Diffusion' : task.type}
+                  </span>
                 </div>
                 <p className="text-sm text-slate-500 mt-1 line-clamp-1">{task.description}</p>
                 <p className="text-xs text-emerald-600 font-bold mt-1">
-                  {task.is_mission ? `Budget mission : ${task.mission_budget} F` : `Gain : ${task.reward} FCFA`} • {task.type}
+                  {task.type === 'diffusion_duration' 
+                    ? `Durée: ${task.duration_hours}h • Gain: ${task.gain_per_view} F/vue` 
+                    : `Gain: ${task.reward} FCFA`}
                 </p>
               </div>
             </div>
@@ -179,29 +196,37 @@ export default function AdminTasksPage() {
                 </div>
               </div>
 
-              <input type="text" required placeholder="Titre de la tâche" value={title} onChange={e => setTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
-              <textarea required placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" rows={2} />
-              <input type="url" required placeholder="Lien d'action (WhatsApp, TikTok...)" value={actionUrl} onChange={e => setActionUrl(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
-              
-              <div className="grid grid-cols-2 gap-3">
-                <input type="number" required placeholder="Gain (FCFA)" value={reward} onChange={e => setReward(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+              {/* Type de tâche */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Type de tâche</label>
                 <select value={type} onChange={e => setType(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm">
-                  <option value="subscribe">S'abonner</option>
+                  <option value="subscribe">S'abonner à un compte</option>
                   <option value="join_channel">Rejoindre un canal</option>
-                  <option value="share">Partager</option>
+                  <option value="share">Partager un lien</option>
+                  <option value="diffusion_duration">Diffuser et garder un statut</option>
                   <option value="custom">Autre</option>
                 </select>
               </div>
 
-              <div className="bg-purple-50 border border-purple-200 p-3 rounded-xl">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={isMission} onChange={e => setIsMission(e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                  <span className="text-sm font-bold text-purple-800">C'est une mission (Bourse aux missions)</span>
-                </label>
-                {isMission && (
-                  <input type="number" required placeholder="Budget de la mission (FCFA)" value={missionBudget} onChange={e => setMissionBudget(e.target.value)} className="w-full mt-2 p-2 border border-purple-200 rounded-lg text-sm" />
-                )}
-              </div>
+              <input type="text" required placeholder="Titre de la tâche" value={title} onChange={e => setTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+              <textarea required placeholder="Description" value={description} onChange={e => setDescription(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" rows={2} />
+              <input type="url" required placeholder="Lien d'action (WhatsApp, TikTok...)" value={actionUrl} onChange={e => setActionUrl(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+              
+              {/* Champs conditionnels selon le type */}
+              {type === 'diffusion_duration' ? (
+                <div className="grid grid-cols-2 gap-3 bg-emerald-50 p-3 rounded-xl border border-emerald-200">
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-700 mb-1">Durée (heures)</label>
+                    <input type="number" required placeholder="24" value={durationHours} onChange={e => setDurationHours(e.target.value)} className="w-full p-2 border border-emerald-200 rounded-lg text-sm bg-white" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-emerald-700 mb-1">Gain / vue (FCFA)</label>
+                    <input type="number" step="0.01" required placeholder="0.20" value={gainPerView} onChange={e => setGainPerView(e.target.value)} className="w-full p-2 border border-emerald-200 rounded-lg text-sm bg-white" />
+                  </div>
+                </div>
+              ) : (
+                <input type="number" required placeholder="Gain fixe (FCFA)" value={reward} onChange={e => setReward(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+              )}
 
               <div className="flex gap-2 mt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
