@@ -7,11 +7,9 @@ import ProfilClient from './ProfilClient'
 async function ProfilData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  
   if (!user) redirect('/login')
   
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-
   if (!profile) redirect('/login')
 
   return <ProfilClient profile={profile} />
@@ -26,7 +24,6 @@ export default function ProfilPage() {
         </Link>
         <img src="/logo.png" alt="XAFERAN" className="h-6 w-auto object-contain" />
       </header>
-
       <div className="p-4 md:p-8 mt-2">
         <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
           <ProfilData />

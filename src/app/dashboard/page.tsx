@@ -10,7 +10,6 @@ export default function DashboardPage() {
   const supabase = createClient()
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [isAnnonceurMode, setIsAnnonceurMode] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -21,20 +20,11 @@ export default function DashboardPage() {
       if (data) {
         if (!data.is_onboarded) { router.push('/onboarding'); return }
         setProfile(data)
-        setIsAnnonceurMode(data.role === 'annonceur')
       }
       setLoading(false)
     }
     loadData()
   }, [router, supabase])
-
-  const toggleMode = async () => {
-    const newMode = !isAnnonceurMode
-    setIsAnnonceurMode(newMode)
-    const newRole = newMode ? 'annonceur' : 'diffuseur'
-    await supabase.from('profiles').update({ role: newRole }).eq('id', profile.id)
-    setProfile({ ...profile, role: newRole })
-  }
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Chargement...</div>
 
@@ -54,26 +44,44 @@ export default function DashboardPage() {
       
       <div className="p-4 md:p-8 max-w-5xl mx-auto w-full mt-4">
         
-        {/* Sélecteur de Mode */}
-        <div className="flex justify-center mb-6">
-          <div className="bg-slate-200 p-1 rounded-full flex shadow-inner">
-            <button 
-              onClick={() => isAnnonceurMode && toggleMode()} 
-              className={`px-6 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 ${!isAnnonceurMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              💰 Diffuseur
-            </button>
-            <button 
-              onClick={() => !isAnnonceurMode && toggleMode()} 
-              className={`px-6 py-2 rounded-full text-xs font-bold transition flex items-center gap-2 ${isAnnonceurMode ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}
-            >
-              📢 Annonceur
-            </button>
-          </div>
-        </div>
+        {/* Vue conditionnelle selon le rôle */}
+        {profile?.role === 'annonceur' ? (
+          // ================= VUE ANNONCEUR =================
+          <div className="space-y-6">
+            <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
+              <div className="relative z-10">
+                <p className="text-amber-100 text-xs font-bold uppercase tracking-wider mb-1">Espace Annonceur</p>
+                <h1 className="text-2xl font-black mb-4">Développe ton business</h1>
+                <Link href="/dashboard/annonces/creer" className="inline-block px-6 py-3 bg-white text-amber-700 font-bold rounded-xl hover:bg-slate-50 transition shadow-md">
+                  + Créer une campagne
+                </Link>
+              </div>
+            </div>
 
-        {/* VUE DIFFUSEUR */}
-        {!isAnnonceurMode && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Link href="/dashboard/annonceur/analytics" className="block bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:border-emerald-300 hover:shadow-md transition">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                  </div>
+                  <h3 className="font-bold text-slate-900">Tableau de bord</h3>
+                </div>
+                <p className="text-sm text-slate-500">Suis les performances de tes campagnes.</p>
+              </Link>
+
+              <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:border-sky-300 hover:shadow-md transition">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
+                  </div>
+                  <h3 className="font-bold text-slate-900">Mes campagnes</h3>
+                </div>
+                <p className="text-sm text-slate-500">Voir et gérer toutes tes annonces.</p>
+              </Link>
+            </div>
+          </div>
+        ) : (
+          // ================= VUE DIFFUSEUR =================
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="md:col-span-2 space-y-4">
               <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
@@ -113,6 +121,7 @@ export default function DashboardPage() {
 
             <div className="md:col-span-1 space-y-4">
               <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1">Services Diffuseur</h2>
+              
               <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-sky-300 hover:shadow-md transition group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 group-hover:bg-sky-100 transition">
@@ -121,6 +130,16 @@ export default function DashboardPage() {
                   <div className="flex-1"><h3 className="font-bold text-slate-900 text-sm">Diffuser</h3><p className="text-xs text-slate-500">Gérer mes annonces</p></div>
                 </div>
               </Link>
+
+              <Link href="/dashboard/equipe" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-100 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  </div>
+                  <div className="flex-1"><h3 className="font-bold text-slate-900 text-sm">Équipe</h3><p className="text-xs text-slate-500">Gérer mes agents</p></div>
+                </div>
+              </Link>
+
               <Link href="/dashboard/statut-ia" className="block bg-purple-50 border border-purple-200 p-4 rounded-2xl shadow-sm hover:border-purple-400 transition group">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-200 transition">
@@ -129,59 +148,31 @@ export default function DashboardPage() {
                   <div className="flex-1"><h3 className="font-bold text-purple-900 text-sm">Statut IA</h3><p className="text-xs text-purple-600">Générer avec l'IA</p></div>
                 </div>
               </Link>
-            </div>
-          </div>
-        )}
 
-        {/* VUE ANNONCEUR */}
-        {isAnnonceurMode && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="md:col-span-2 space-y-4">
-              <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
-                <div className="relative z-10">
-                  <p className="text-amber-100 text-xs font-bold uppercase tracking-wider mb-1">Espace Annonceur</p>
-                  <h1 className="text-2xl font-black mb-4">Développe ton business</h1>
-                  <Link href="/dashboard/annonces/creer" className="inline-block px-6 py-3 bg-white text-amber-700 font-bold rounded-xl hover:bg-slate-50 transition shadow-md">
-                    + Créer une campagne
-                  </Link>
-                </div>
-              </div>
-
-              <Link href="/dashboard/annonceur/analytics" className="block bg-white border border-slate-200 p-5 rounded-2xl shadow-sm hover:border-emerald-300 hover:shadow-md transition">
-                <div className="flex items-center justify-between mb-3">
-                  <h2 className="font-bold text-slate-900">Tableau de bord</h2>
-                  <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
-                </div>
-                <p className="text-sm text-slate-500 mb-4">Suis tes performances en temps réel.</p>
-                <div className="flex gap-4">
-                  <div className="flex-1 bg-slate-50 p-3 rounded-xl text-center">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Vues</p>
-                    <p className="text-lg font-black text-slate-900">--</p>
+              <Link href="/dashboard/statut-flash" className="block bg-rose-50 border border-rose-200 p-4 rounded-2xl shadow-sm hover:border-rose-400 transition group">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 group-hover:bg-rose-200 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                   </div>
-                  <div className="flex-1 bg-slate-50 p-3 rounded-xl text-center">
-                    <p className="text-[10px] font-bold text-slate-500 uppercase">Clics</p>
-                    <p className="text-lg font-black text-slate-900">--</p>
-                  </div>
+                  <div className="flex-1"><h3 className="font-bold text-rose-900 text-sm">Statut Flash</h3><p className="text-xs text-rose-600">Offres limitées</p></div>
                 </div>
               </Link>
-            </div>
 
-            <div className="md:col-span-1 space-y-4">
-              <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1">Outils Annonceur</h2>
-              <Link href="/dashboard/annonces/creer" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-amber-300 hover:shadow-md transition group">
+              <Link href="/dashboard/flyers" className="block bg-cyan-50 border border-cyan-200 p-4 rounded-2xl shadow-sm hover:border-cyan-400 transition group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 group-hover:bg-amber-100 transition">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
+                  <div className="w-10 h-10 bg-cyan-100 rounded-xl flex items-center justify-center text-cyan-600 group-hover:bg-cyan-200 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
                   </div>
-                  <div className="flex-1"><h3 className="font-bold text-slate-900 text-sm">Créer</h3><p className="text-xs text-slate-500">Nouvelle campagne</p></div>
+                  <div className="flex-1"><h3 className="font-bold text-cyan-900 text-sm">Flyers</h3><p className="text-xs text-cyan-600">Affiches pro</p></div>
                 </div>
               </Link>
-              <Link href="/dashboard/annonceur/analytics" className="block bg-emerald-50 border border-emerald-200 p-4 rounded-2xl shadow-sm hover:border-emerald-400 transition group">
+
+              <Link href="/dashboard/video-promo" className="block bg-fuchsia-50 border border-fuchsia-200 p-4 rounded-2xl shadow-sm hover:border-fuchsia-400 transition group">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-200 transition">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                  <div className="w-10 h-10 bg-fuchsia-100 rounded-xl flex items-center justify-center text-fuchsia-600 group-hover:bg-fuchsia-200 transition">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   </div>
-                  <div className="flex-1"><h3 className="font-bold text-emerald-900 text-sm">Statistiques</h3><p className="text-xs text-emerald-600">Voir mes résultats</p></div>
+                  <div className="flex-1"><h3 className="font-bold text-fuchsia-900 text-sm">Vidéo Promo</h3><p className="text-xs text-fuchsia-600">Visuels animés</p></div>
                 </div>
               </Link>
             </div>

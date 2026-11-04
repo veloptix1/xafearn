@@ -1,13 +1,22 @@
 'use client'
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 
-export default function ProfilClient({ profile }: { profile: any }) {
-  const [showToast, setShowToast] = useState(false)
+export default function ProfilClient({ profile: initialProfile }: { profile: any }) {
+  const router = useRouter()
+  const supabase = createClient()
+  const [profile, setProfile] = useState(initialProfile)
+  const [isAnnonceurMode, setIsAnnonceurMode] = useState(profile?.role === 'annonceur')
 
-  const handleComingSoon = () => {
-    setShowToast(true)
-    setTimeout(() => setShowToast(false), 3000)
+  const toggleMode = async () => {
+    const newMode = !isAnnonceurMode
+    setIsAnnonceurMode(newMode)
+    const newRole = newMode ? 'annonceur' : 'diffuseur'
+    await supabase.from('profiles').update({ role: newRole }).eq('id', profile.id)
+    setProfile({ ...profile, role: newRole })
+    router.refresh()
   }
 
   const menuItems = [
@@ -40,13 +49,7 @@ export default function ProfilClient({ profile }: { profile: any }) {
 
   return (
     <div className="max-w-lg mx-auto">
-      {showToast && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl text-sm font-medium z-50">
-          Fonctionnalité bientôt disponible !
-        </div>
-      )}
-
-      {/* Carte de visite Premium */}
+      {/* Carte de visite */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6">
         <div className={`h-24 bg-gradient-to-r ${levelColor}`}></div>
         <div className="px-6 pb-6 relative">
@@ -56,9 +59,9 @@ export default function ProfilClient({ profile }: { profile: any }) {
                 {profile?.full_name?.charAt(0).toUpperCase() || 'U'}
               </div>
             </div>
-            <button onClick={handleComingSoon} className="px-4 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-full hover:bg-slate-200 transition">
+            <Link href="/dashboard/profil/modifier" className="px-4 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-full hover:bg-slate-200 transition">
               Modifier
-            </button>
+            </Link>
           </div>
           
           <h1 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Utilisateur'}</h1>
@@ -68,11 +71,30 @@ export default function ProfilClient({ profile }: { profile: any }) {
             <span className={`text-xs font-bold px-3 py-1 rounded-full bg-gradient-to-r ${levelColor} text-white shadow-sm`}>
               Niveau {profile?.level || 1} • {levelName}
             </span>
-            <span className="text-xs font-bold px-3 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200 capitalize">
-              {profile?.role || 'Diffuseur'}
-            </span>
           </div>
         </div>
+      </div>
+
+      {/* Sélecteur de Mode */}
+      <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mb-6">
+        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Mode d'utilisation</p>
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <button 
+            onClick={() => isAnnonceurMode && toggleMode()} 
+            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${!isAnnonceurMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
+          >
+            💰 Diffuseur
+          </button>
+          <button 
+            onClick={() => !isAnnonceurMode && toggleMode()} 
+            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isAnnonceurMode ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}
+          >
+            📢 Annonceur
+          </button>
+        </div>
+        <p className="text-[10px] text-slate-400 mt-2 text-center">
+          {isAnnonceurMode ? 'Tu es en mode annonceur. Crée et gère tes campagnes publicitaires.' : 'Tu es en mode diffuseur. Gagne de l\'argent en publiant des annonces.'}
+        </p>
       </div>
 
       {/* Menu des options */}
@@ -80,7 +102,7 @@ export default function ProfilClient({ profile }: { profile: any }) {
         {menuItems.map((item, index) => (
           <Link 
             key={index}
-            href={item.href || '#'}
+            href={item.href}
             className="w-full flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition text-left"
           >
             <div className="flex items-center gap-4">
