@@ -2,20 +2,25 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
-// On utilise la clé service_role pour bypasser les RLS dans le webhook
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = 'force-dynamic'
 
 export async function POST(req: Request) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Variables Supabase manquantes')
+      return new NextResponse('Configuration manquante', { status: 500 })
+    }
+
+    const supabase = createClient(supabaseUrl, supabaseKey)
+
     const rawBody = await req.text()
     const signature = req.headers.get('x-leekpay-signature')
     
-    // 1. Vérifier la signature (Sécurité)
     const expectedSignature = crypto
-      .createHmac('sha256', process.env.LEEKPAY_PUBLIC_KEY!)
+      .createHmac('sha256', process.env.LEEKPAY_PUBLIC_KEY || '')
       .update(rawBody)
       .digest('hex')
 
@@ -36,11 +41,9 @@ export async function POST(req: Request) {
     const userId = data.metadata?.user_id
 
     if (!checkoutId || !userId) {
-      console.error('Données manquantes:', data)
       return new NextResponse('Missing data', { status: 400 })
     }
 
-    // 2. Mettre à jour le statut du paiement
     const { data: payment } = await supabase
       .from('leekpay_payments')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
@@ -49,11 +52,9 @@ export async function POST(req: Request) {
       .single()
 
     if (!payment) {
-      console.error('Paiement introuvable:', checkoutId)
       return new NextResponse('Payment not found', { status: 404 })
     }
 
-    // 3. Créditer le solde de l'utilisateur (Recharge annonceur)
     const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
     
     if (profile) {
@@ -61,7 +62,6 @@ export async function POST(req: Request) {
         balance: (profile.balance || 0) + amount
       }).eq('id', userId)
 
-      // 4. Créer une notification
       await supabase.from('notifications').insert({
         user_id: userId,
         title: 'Recharge réussie 💰',
