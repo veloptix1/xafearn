@@ -3,15 +3,15 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 
-async function ProfileContent({ usernamePromise }: { usernamePromise: Promise<{ username: string }> }) {
-  const resolvedParams = await usernamePromise
+async function ProfileContent({ idPromise }: { idPromise: Promise<{ username: string }> }) {
+  const resolvedParams = await idPromise
   const supabase = await createClient()
   
-  // On cherche l'utilisateur par son nom
+  // On cherche l'utilisateur par son ID (qui est passé dans l'URL)
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
-    .ilike('full_name', resolvedParams.username)
+    .eq('id', resolvedParams.username)
     .maybeSingle()
 
   if (!profile) return notFound()
@@ -28,7 +28,6 @@ async function ProfileContent({ usernamePromise }: { usernamePromise: Promise<{ 
 
   return (
     <div className="max-w-2xl mx-auto p-4 mt-4">
-      {/* Carte Profil */}
       <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm text-center mb-6">
         <div className="w-24 h-24 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center text-4xl font-black mx-auto mb-4 border-4 border-white shadow-md">
           {profile.full_name?.charAt(0)}
@@ -48,7 +47,6 @@ async function ProfileContent({ usernamePromise }: { usernamePromise: Promise<{ 
         </div>
       </div>
 
-      {/* Liste des posts */}
       <h2 className="font-bold text-slate-900 mb-4 px-1">Publications</h2>
       <div className="grid grid-cols-2 gap-2">
         {posts?.length === 0 ? (
@@ -92,7 +90,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
           <p className="text-slate-500 font-medium">Chargement du profil...</p>
         </div>
       }>
-        <ProfileContent usernamePromise={params} />
+        <ProfileContent idPromise={params} />
       </Suspense>
     </main>
   )

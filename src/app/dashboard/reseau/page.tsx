@@ -221,7 +221,7 @@ export default function ReseauPage() {
             <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
               
               <div className="flex items-center gap-3 p-3">
-                <Link href={`/u/${post.profiles?.full_name}`} className="flex items-center gap-3 hover:opacity-80">
+                <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
                   <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
                     {post.profiles?.full_name?.charAt(0)}
                   </div>
