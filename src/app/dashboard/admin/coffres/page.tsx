@@ -1,0 +1,195 @@
+'use client'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
+import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
+
+export default function AdminTreasuresPage() {
+  const supabase = createClient()
+  const router = useRouter()
+  const [loading, setLoading] = useState(true)
+  const [treasures, setTreasures] = useState<any[]>([])
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+
+  // Formulaire
+  const [sponsorName, setSponsorName] = useState('')
+  const [sponsorLogo, setSponsorLogo] = useState('')
+  const [totalAmount, setTotalAmount] = useState('')
+  const [secretCode, setSecretCode] = useState('')
+  const [durationHours, setDurationHours] = useState('24')
+  const [links, setLinks] = useState<any[]>([])
+
+  // Calcul des paliers
+  const getTier = (amount: number) => {
+    if (amount >= 50000) return { name: 'diamant', fee: 0.15, winners: [0.40, 0.25, 0.15, 0.10, 0.10], time: 72 }
+    if (amount >= 10000) return { name: 'or', fee: 0.20, winners: [0.50, 0.30, 0.20], time: 48 }
+    if (amount >= 5000) return { name: 'argent', fee: 0.25, winners: [0.70, 0.30], time: 36 }
+    return { name: 'bronze', fee: 0.30, winners: [1.0], time: 24 }
+  }
+
+  const amount = parseFloat(totalAmount) || 0
+  const tierInfo = getTier(amount)
+  const platformFee = amount * tierInfo.fee
+  const prizePool = amount - platformFee
+
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
+      
+      const { data } = await supabase.from('treasures').select('*').order('created_at', { ascending: false })
+      setTreasures(data || [])
+      setLoading(false)
+    }
+    load()
+  }, [router, supabase])
+
+  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
+  const addLink = () => {
+    setLinks([...links, { platform: 'youtube', url: '', hint: '' }])
+  }
+
+  const updateLink = (index: number, field: string, value: string) => {
+    const newLinks = [...links]
+    newLinks[index][field] = value
+    setLinks(newLinks)
+  }
+
+  const removeLink = (index: number) => {
+    setLinks(links.filter((_, i) => i !== index))
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (amount < 1000) return showToast('Le montant minimum est de 1000 FCFA.')
+    if (links.length === 0) return showToast('Ajoute au moins un lien.')
+
+    const expiresAt = new Date(Date.now() + tierInfo.time * 60 * 60 * 1000).toISOString()
+
+    // 1. Créer le coffre
+    const { data: treasure, error } = await supabase.from('treasures').insert({
+      sponsor_name: sponsorName,
+      sponsor_logo_url: sponsorLogo,
+      total_amount: amount,
+      platform_fee: platformFee,
+      prize_pool: prizePool,
+      tier: tierInfo.name,
+      secret_code: secretCode.trim().toUpperCase(),
+      expires_at: expiresAt,
+      status: 'active'
+    }).select().single()
+
+    if (error) return showToast('Erreur: ' + error.message)
+
+    // 2. Ajouter les liens
+    const linksToInsert = links.map(l => ({ treasure_id: treasure.id, platform: l.platform, url: l.url, hint: l.hint }))
+    await supabase.from('treasure_links').insert(linksToInsert)
+
+    showToast('Coffre-fort créé avec succès !')
+    setIsModalOpen(false)
+    setSponsorName(''); setSponsorLogo(''); setTotalAmount(''); setSecretCode(''); setLinks([])
+    window.location.reload()
+  }
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>
+
+  return (
+    <main className="min-h-screen bg-slate-50 pb-24">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
+        <div className="flex items-center gap-4">
+          <Link href="/dashboard/admin" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+          </Link>
+          <h1 className="text-lg font-bold text-slate-900">Gestion des Coffres</h1>
+        </div>
+        <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-400">+ Nouveau Coffre</button>
+      </header>
+
+      <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-3">
+        {toast && <div className="bg-slate-900 text-white p-3 rounded-xl text-center text-sm font-bold">{toast}</div>}
+        
+        {treasures.map(t => (
+          <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-slate-900">{t.sponsor_name}</h3>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-100 text-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-700`}>{t.tier}</span>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{t.status}</span>
+              </div>
+              <p className="text-sm text-slate-500 mt-1">Trésor : <strong className="text-amber-600">{t.prize_pool} F</strong> (Total payé: {t.total_amount} F)</p>
+              <p className="text-xs text-slate-400">Code secret : {t.secret_code} • Expire : {new Date(t.expires_at).toLocaleString('fr-FR')}</p>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={async () => { await supabase.from('treasures').update({ status: 'expired' }).eq('id', t.id); window.location.reload() }} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Clôturer</button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* MODAL DE CRÉATION */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl p-6 my-8">
+            <h2 className="font-bold text-lg mb-4">Créer un Coffre-fort</h2>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" required placeholder="Nom de l'annonceur" value={sponsorName} onChange={e => setSponsorName(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+                <input type="url" placeholder="Logo (URL)" value={sponsorLogo} onChange={e => setSponsorLogo(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Montant total (Min. 1000 FCFA)</label>
+                <input type="number" required min="1000" placeholder="Ex: 5000" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold" />
+              </div>
+
+              {/* Aperçu des paliers */}
+              {amount >= 1000 && (
+                <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-sm">
+                  <p className="font-bold text-amber-800 mb-2">Palier : {tierInfo.name.toUpperCase()} ({tierInfo.time}h)</p>
+                  <p className="text-amber-700">Commission plateforme : <strong>{platformFee.toFixed(0)} F ({tierInfo.fee * 100}%)</strong></p>
+                  <p className="text-amber-700">Cagnotte pour les gagnants : <strong>{prizePool.toFixed(0)} F</strong></p>
+                  <p className="text-amber-700 mt-1">Répartition : {tierInfo.winners.length} gagnant(s) ({(tierInfo.winners.map(w => `${w * 100}%`).join(' / ')}))</p>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" required placeholder="Code secret (ex: XAFEARN2026)" value={secretCode} onChange={e => setSecretCode(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase" />
+                <div className="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500">Durée : {tierInfo.time}h</div>
+              </div>
+
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <label className="block text-xs font-bold text-slate-500 uppercase">Liens & Indices</label>
+                  <button type="button" onClick={addLink} className="text-xs font-bold text-sky-600">+ Ajouter un lien</button>
+                </div>
+                {links.map((link, i) => (
+                  <div key={i} className="bg-slate-50 p-3 rounded-xl mb-2 space-y-2 relative">
+                    <button type="button" onClick={() => removeLink(i)} className="absolute top-2 right-2 text-red-500 text-xs font-bold">X</button>
+                    <select value={link.platform} onChange={e => updateLink(i, 'platform', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm">
+                      <option value="youtube">YouTube</option>
+                      <option value="tiktok">TikTok</option>
+                      <option value="instagram">Instagram</option>
+                      <option value="facebook">Facebook</option>
+                    </select>
+                    <input type="url" required placeholder="URL de la vidéo" value={link.url} onChange={e => updateLink(i, 'url', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                    <input type="text" required placeholder="Indice caché (ex: 'Le chiffre est 4')" value={link.hint} onChange={e => updateLink(i, 'hint', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 mt-4">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+                <button type="submit" className="flex-1 py-3 bg-amber-500 text-white font-bold rounded-xl">Créer le coffre</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </main>
+  )
+}
