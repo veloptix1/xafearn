@@ -4,6 +4,26 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import NotificationBell from '@/components/NotificationBell'
 
+async function DashboardHeader() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  return (
+    <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
+      <img src="/logo.png" alt="XAFERAN" className="h-7 w-auto object-contain" />
+      <div className="flex items-center gap-2">
+        <NotificationBell userId={user.id} />
+        <Link href="/dashboard/profil" className="w-9 h-9 bg-slate-100 border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+          </svg>
+        </Link>
+      </div>
+    </header>
+  )
+}
+
 async function DashboardData() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -98,17 +118,9 @@ async function DashboardData() {
 export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
-      <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
-        <img src="/logo.png" alt="XAFERAN" className="h-7 w-auto object-contain" />
-        <div className="flex items-center gap-2">
-          <NotificationBell userId={user.id} />
-          <Link href="/dashboard/profil" className="w-9 h-9 bg-slate-100 border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-            </svg>
-          </Link>
-        </div>
-      </header>
+      <Suspense fallback={<div className="h-14 bg-white border-b border-slate-200"></div>}>
+        <DashboardHeader />
+      </Suspense>
       
       <div className="p-4 md:p-8 max-w-5xl mx-auto w-full mt-4">
         <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
