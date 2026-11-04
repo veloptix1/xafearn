@@ -31,42 +31,36 @@ export default function ReseauPage() {
   const [newComment, setNewComment] = useState('')
   const [isCommenting, setIsCommenting] = useState(false)
 
-  // Modification / Suppression
+  // Gestion du menu (Modifier / Supprimer)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingPost, setEditingPost] = useState<any>(null)
   const [editText, setEditText] = useState('')
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   useEffect(() => {
-    loadPosts()
+    loadData()
   }, [activeTab])
 
-  async function loadPosts() {
+  async function loadData() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
+    // 1. Charger le profil d'abord
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
 
+    // 2. Charger les posts
     let query = supabase.from('posts').select('*, profiles(full_name)')
-    
-    if (activeTab === 'recents') {
-      query = query.order('created_at', { ascending: false })
-    } else if (activeTab === 'top') {
-      query = query.order('total_coins_received', { ascending: false })
-    } else {
-      query = query.order('created_at', { ascending: false })
-    }
+    if (activeTab === 'recents') query = query.order('created_at', { ascending: false })
+    else if (activeTab === 'top') query = query.order('total_coins_received', { ascending: false })
+    else query = query.order('created_at', { ascending: false })
 
     const { data: p } = await query
     
     if (p && p.length > 0) {
       const postsWithCounts = await Promise.all(p.map(async (post) => {
-        const { count } = await supabase
-          .from('post_comments')
-          .select('*', { count: 'exact', head: true })
-          .eq('post_id', post.id)
+        const { count } = await supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id)
         return { ...post, comments_count: count || 0 }
       }))
       setPosts(postsWithCounts)
@@ -76,7 +70,6 @@ export default function ReseauPage() {
     setLoading(false)
   }
 
-  // Compression Image
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
@@ -103,22 +96,17 @@ export default function ReseauPage() {
     e.preventDefault()
     if (!newText && !newMedia) return showToast('Ajoute du texte ou un média.', 'warning')
     
-    // Vérification de la vidéo (25s max)
     if (mediaType === 'video' && newMedia) {
       const video = document.createElement('video')
       video.preload = 'metadata'
       video.onloadedmetadata = async () => {
         window.URL.revokeObjectURL(video.src)
-        if (video.duration > 25) {
-          return showToast('La vidéo ne doit pas dépasser 25 secondes.', 'error')
-        }
-        // Si OK, on upload
+        if (video.duration > 25) return showToast('La vidéo ne doit pas dépasser 25 secondes.', 'error')
         await uploadPost()
       }
       video.src = URL.createObjectURL(newMedia)
       return
     }
-
     await uploadPost()
   }
 
@@ -139,13 +127,13 @@ export default function ReseauPage() {
         user_id: profile.id,
         content_type: newMedia ? mediaType : 'text',
         text_content: newText,
-        image_url: mediaUrl // On utilise image_url pour stocker les deux
+        image_url: mediaUrl
       })
 
       showToast('Publication réussie !', 'success')
       setIsCreateOpen(false)
       setNewText(''); setNewMedia(null)
-      loadPosts()
+      loadData()
     } catch (err) {
       showToast('Erreur lors de la publication.', 'error')
     }
@@ -169,35 +157,11 @@ export default function ReseauPage() {
       
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
-      loadPosts()
+      loadData()
     } catch (err: any) {
       showToast('Erreur: ' + err.message, 'error')
     }
     setIsSending(false)
-  }
-
-  const handleDeletePost = async () => {
-    try {
-      await supabase.from('posts').delete().eq('id', deletingPostId)
-      showToast('Publication supprimée.', 'success')
-      setDeletingPostId(null)
-      loadPosts()
-    } catch (err) {
-      showToast('Erreur lors de la suppression.', 'error')
-    }
-  }
-
-  const handleUpdatePost = async () => {
-    setIsUpdating(true)
-    try {
-      await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
-      showToast('Publication modifiée !', 'success')
-      setEditingPost(null)
-      loadPosts()
-    } catch (err) {
-      showToast('Erreur lors de la modification.', 'error')
-    }
-    setIsUpdating(false)
   }
 
   const openComments = async (post: any) => {
@@ -216,17 +180,38 @@ export default function ReseauPage() {
       if (activeCommentPost.user_id !== profile.id) {
         await supabase.from('notifications').insert({
           user_id: activeCommentPost.user_id, title: 'Nouveau commentaire 💬',
-          message: `${profile.full_name} a commenté ta publication : "${newComment.trim().substring(0, 30)}..."`,
-          link: '/dashboard/reseau'
+          message: `${profile.full_name} a commenté ta publication.`, link: '/dashboard/reseau'
         })
       }
 
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
-      loadPosts()
+      loadData()
     } catch (err) { showToast('Erreur commentaire.', 'error') }
     setIsCommenting(false)
+  }
+
+  const handleDeletePost = async () => {
+    if (!deletingPostId) return
+    try {
+      await supabase.from('posts').delete().eq('id', deletingPostId)
+      showToast('Publication supprimée.', 'success')
+      setDeletingPostId(null)
+      loadData()
+    } catch (err) { showToast('Erreur suppression.', 'error') }
+  }
+
+  const handleUpdatePost = async () => {
+    if (!editingPost || !editText.trim()) return
+    setIsUpdating(true)
+    try {
+      await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
+      showToast('Publication modifiée !', 'success')
+      setEditingPost(null)
+      loadData()
+    } catch (err) { showToast('Erreur modification.', 'error') }
+    setIsUpdating(false)
   }
 
   if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Chargement...</div>
@@ -249,18 +234,32 @@ export default function ReseauPage() {
       <div className="pt-16 pb-20">
         {posts.map(post => (
           <div key={post.id} className="mb-6 px-4">
-            <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+            <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg relative">
               
-              <div className="flex items-center gap-3 p-3">
+              <div className="flex items-center justify-between p-3">
                 <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
                   <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
                     {post.profiles?.full_name?.charAt(0)}
                   </div>
                   <p className="font-bold text-sm">@{post.profiles?.full_name}</p>
                 </Link>
+
+                {/* Menu 3 points (uniquement si c'est mon post) */}
+                {post.user_id === profile?.id && (
+                  <div className="relative">
+                    <button onClick={() => setOpenMenuId(openMenuId === post.id ? null : post.id)} className="p-2 text-slate-400 hover:text-white">
+                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                    </button>
+                    {openMenuId === post.id && (
+                      <div className="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20">
+                        <button onClick={() => { setEditingPost(post); setEditText(post.text_content); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm hover:bg-white/10 rounded-t-xl border-b border-white/5">Modifier</button>
+                        <button onClick={() => { setDeletingPostId(post.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/10 rounded-b-xl">Supprimer</button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Affichage Image OU Vidéo */}
               {post.content_type === 'image' && post.image_url && (
                 <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain bg-black" />
               )}
@@ -289,24 +288,21 @@ export default function ReseauPage() {
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* Modal Création (avec choix Image/Vidéo) */}
+      {/* Modal Création */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
             <h2 className="font-bold text-lg mb-4">Créer une publication</h2>
             <form onSubmit={handleCreatePost} className="space-y-4">
               <textarea placeholder="Quoi de neuf ?" value={newText} onChange={e => setNewText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" rows={3} />
-              
               <div className="flex gap-2 mb-2">
                 <button type="button" onClick={() => setMediaType('image')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${mediaType === 'image' ? 'bg-sky-100 text-sky-700 border-2 border-sky-500' : 'bg-slate-100 text-slate-500'}`}>Image</button>
-                <button type="button" onClick={() => setMediaType('video')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${mediaType === 'video' ? 'bg-sky-100 text-sky-700 border-2 border-sky-500' : 'bg-slate-100 text-slate-500'}`}>Vidéo (25s max)</button>
+                <button type="button" onClick={() => setMediaType('video')} className={`flex-1 py-2 rounded-lg font-bold text-sm ${mediaType === 'video' ? 'bg-sky-100 text-sky-700 border-2 border-sky-500' : 'bg-slate-100 text-slate-500'}`}>Vidéo (25s)</button>
               </div>
-
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative">
                 <input type="file" accept={mediaType === 'image' ? 'image/*' : 'video/*'} onChange={e => setNewMedia(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 {newMedia ? <p className="text-sm text-emerald-600 font-medium">Fichier sélectionné</p> : <p className="text-sm text-slate-500">Ajouter un fichier</p>}
               </div>
-
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
                 <button type="submit" disabled={isUploading} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
@@ -318,7 +314,40 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modals Jetons et Commentaires (Inchangés) */}
+      {/* Modal Modification */}
+      {editingPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
+            <h2 className="font-bold text-lg mb-4">Modifier la publication</h2>
+            <textarea value={editText} onChange={e => setEditText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-4" rows={4} />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingPost(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+              <button onClick={handleUpdatePost} disabled={isUpdating} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
+                {isUpdating ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Suppression */}
+      {deletingPostId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900">
+            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </div>
+            <h3 className="font-bold text-lg mb-2">Supprimer cette publication ?</h3>
+            <p className="text-sm text-slate-500 mb-6">Cette action est irréversible.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeletingPostId(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+              <button onClick={handleDeletePost} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Jetons */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900">
@@ -341,6 +370,7 @@ export default function ReseauPage() {
         </div>
       )}
 
+      {/* Modal Commentaires */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
           <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
@@ -363,44 +393,6 @@ export default function ReseauPage() {
           </div>
         </div>
       )}
-      {/* Fermer le menu si on clique ailleurs */}
-      {openMenuId && (
-        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)}></div>
-      )}
-
-      {/* MODAL DE MODIFICATION */}
-      {editingPost && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
-            <h2 className="font-bold text-lg mb-4">Modifier la publication</h2>
-            <textarea value={editText} onChange={e => setEditText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-4" rows={4} />
-            <div className="flex gap-2">
-              <button onClick={() => setEditingPost(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
-              <button onClick={handleUpdatePost} disabled={isUpdating} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
-                {isUpdating ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL DE SUPPRESSION */}
-      {deletingPostId && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900">
-            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
-            </div>
-            <h3 className="font-bold text-lg mb-2">Supprimer cette publication ?</h3>
-            <p className="text-sm text-slate-500 mb-6">Cette action est irréversible.</p>
-            <div className="flex gap-2">
-              <button onClick={() => setDeletingPostId(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
-              <button onClick={handleDeletePost} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl">Supprimer</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </main>
   )
 }
