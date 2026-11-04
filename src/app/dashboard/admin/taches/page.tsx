@@ -81,35 +81,47 @@ export default function AdminTasksPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const taskData: any = { 
-      title, 
-      description, 
-      action_url: actionUrl, 
-      type, 
-      status: 'active', 
-      image_url: imageUrl 
-    }
+    try {
+      const taskData: any = { 
+        title, 
+        description, 
+        action_url: actionUrl, 
+        type, 
+        status: 'active', 
+        image_url: imageUrl 
+      }
 
-    // Selon le type, on enregistre les bons champs
-    if (type === 'diffusion_duration') {
-      taskData.gain_per_view = parseFloat(gainPerView) || 0
-      taskData.duration_hours = parseInt(durationHours) || 24
-      taskData.reward = 0 // Pas de reward fixe pour les diffusions
-    } else {
-      taskData.reward = parseFloat(reward) || 0
-      taskData.gain_per_view = null
-      taskData.duration_hours = null
-    }
+      // Selon le type, on enregistre les bons champs
+      if (type === 'diffusion_duration') {
+        taskData.gain_per_view = parseFloat(gainPerView) || 0
+        taskData.duration_hours = parseInt(durationHours) || 24
+        taskData.reward = 0
+      } else {
+        taskData.reward = parseFloat(reward) || 0
+        taskData.gain_per_view = null
+        taskData.duration_hours = null
+      }
 
-    if (editingTask) {
-      await supabase.from('tasks').update(taskData).eq('id', editingTask.id)
-      showToast('Tâche modifiée !')
-    } else {
-      await supabase.from('tasks').insert(taskData)
-      showToast('Tâche créée !')
+      let error;
+      if (editingTask) {
+        const res = await supabase.from('tasks').update(taskData).eq('id', editingTask.id)
+        error = res.error
+      } else {
+        const res = await supabase.from('tasks').insert(taskData)
+        error = res.error
+      }
+
+      if (error) {
+        showToast('ERREUR: ' + error.message)
+        return
+      }
+
+      showToast(editingTask ? 'Tâche modifiée !' : 'Tâche créée !')
+      setIsModalOpen(false)
+      loadTasks()
+    } catch (err: any) {
+      showToast('Erreur fatale: ' + err.message)
     }
-    setIsModalOpen(false)
-    loadTasks()
   }
 
   const toggleStatus = async (task: any) => {
