@@ -4,6 +4,18 @@ import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
+// --- ACTIONS ADMIN ---
+
+async function updateCampaignStatus(formData: FormData) {
+  'use server'
+  const supabase = await createClient()
+  const id = formData.get('id') as string
+  const status = formData.get('status') as string
+  await supabase.from('campaigns').update({ status }).eq('id', id)
+  revalidatePath('/dashboard/admin')
+  revalidatePath('/dashboard/annonces')
+}
+
 async function deleteCampaign(formData: FormData) {
   'use server'
   const supabase = await createClient()
@@ -26,21 +38,6 @@ async function deleteUser(formData: FormData) {
   const supabase = await createClient()
   const id = formData.get('id') as string
   await supabase.from('profiles').delete().eq('id', id)
-  revalidatePath('/dashboard/admin')
-}
-
-async function deleteSubmission(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  const videoUrl = formData.get('videoUrl') as string
-  
-  if (videoUrl) {
-    const fileName = videoUrl.split('/').pop()
-    if (fileName) await supabase.storage.from('proof-videos').remove([fileName])
-  }
-  
-  await supabase.from('ad_submissions').delete().eq('id', id)
   revalidatePath('/dashboard/admin')
 }
 
@@ -75,15 +72,30 @@ async function updateSubmissionStatus(formData: FormData) {
   revalidatePath('/dashboard/admin')
 }
 
+async function deleteSubmission(formData: FormData) {
+  'use server'
+  const supabase = await createClient()
+  const id = formData.get('id') as string
+  const videoUrl = formData.get('videoUrl') as string
+  
+  if (videoUrl) {
+    const fileName = videoUrl.split('/').pop()
+    if (fileName) await supabase.storage.from('proof-videos').remove([fileName])
+  }
+  
+  await supabase.from('ad_submissions').delete().eq('id', id)
+  revalidatePath('/dashboard/admin')
+}
+
+// --- COMPOSANTS ---
+
 async function AdminContent() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return redirect('/login')
 
-  // On récupère le profil de l'utilisateur connecté
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
   
-  // Si ce n'est pas un admin, on redirige
   if (!profile || profile.role !== 'admin') {
     return (
       <div className="text-center py-20">
@@ -93,13 +105,12 @@ async function AdminContent() {
     )
   }
 
-  // On charge les données
   const { data: campaigns } = await supabase.from('campaigns').select('*, profiles!fk_campaigns_profiles(full_name, email)').order('created_at', { ascending: false })
   const { data: submissions } = await supabase.from('ad_submissions').select('*, profiles(full_name, email, level, balance), campaigns(title)').order('created_at', { ascending: false })
   const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       
       {/* 1. UTILISATEURS */}
       <div>
@@ -154,6 +165,11 @@ async function AdminContent() {
           <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           Preuves ({submissions?.length || 0})
         </h2>
+        {submissions?.length === 0 && (
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">
+            Aucune preuve à valider.
+          </div>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {submissions?.map((s: any) => {
             const gainPerView = s.profiles?.level === 1 ? 0.50 : s.profiles?.level === 2 ? 1.25 : 1.75
@@ -202,19 +218,43 @@ async function AdminContent() {
         </h2>
         <div className="grid grid-cols-1 gap-3">
           {campaigns?.map((c: any) => (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-3 flex gap-3 items-center">
-              {c.image_url && <img src={c.image_url} className="w-16 h-16 object-cover rounded-lg" />}
+            <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-3 flex flex-col md:flex-row gap-4 items-start md:items-center">
+              {c.image_url && <img src={c.image_url} className="w-16 h-16 object-cover rounded-lg shrink-0" />}
+              
               <div className="flex-1">
                 <h3 className="font-bold text-slate-900 text-sm">{c.title}</h3>
                 <p className="text-xs text-slate-500">{c.profiles?.full_name}</p>
               </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                {c.status}
-              </span>
-              <form action={deleteCampaign}>
-                <input type="hidden" name="id" value={c.id} />
-                <button type="submit" className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Suppr.</button>
-              </form>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : c.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>
+                  {c.status}
+                </span>
+
+                {/* BOUTON APPROUVER */}
+                {c.status === 'pending' && (
+                  <form action={updateCampaignStatus}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <input type="hidden" name="status" value="active" />
+                    <button type="submit" className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded hover:bg-emerald-400">Approuver</button>
+                  </form>
+                )}
+
+                {/* BOUTON REJETER */}
+                {c.status !== 'rejected' && (
+                  <form action={updateCampaignStatus}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <input type="hidden" name="status" value="rejected" />
+                    <button type="submit" className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded hover:bg-amber-200">Rejeter</button>
+                  </form>
+                )}
+
+                {/* BOUTON SUPPRIMER */}
+                <form action={deleteCampaign}>
+                  <input type="hidden" name="id" value={c.id} />
+                  <button type="submit" className="px-3 py-1 bg-red-100 text-red-700 text-xs font-bold rounded hover:bg-red-200">Suppr.</button>
+                </form>
+              </div>
             </div>
           ))}
         </div>
