@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/client'
 
 export default function DiffusionModal({ campaign, userId, submission }: { campaign: any, userId: string, submission?: any }) {
   const [isOpen, setIsOpen] = useState(false)
-  const [step, setStep] = useState<'details' | 'verify'>('details')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   
