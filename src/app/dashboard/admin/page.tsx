@@ -43,7 +43,7 @@ async function validateSubmission(formData: FormData) {
       message: 'Félicitations ! Toutes les campagnes payantes sont débloquées.', link: '/dashboard/annonces'
     })
   } else {
-    const gainPerView = profile.level === 1 ? 0.50 : profile.level === 2 ? 1.25 : 1.75
+    const gainPerView = (campaign as any).custom_gain_per_view ? (campaign as any).custom_gain_per_view : (profile.level === 1 ? 0.50 : profile.level === 2 ? 1.25 : 1.75)
     const totalGain = gainPerView * views
     await supabase.from('profiles').update({ balance: (profile.balance || 0) + totalGain }).eq('id', sub.user_id)
     await supabase.from('notifications').insert({
