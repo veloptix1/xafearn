@@ -71,9 +71,8 @@ export default function FlyersPage() {
   const handleDownload = async () => {
     if (!canvasRef.current) return
     setDownloading(true)
-    setSelectedId(null) // Désélectionner pour enlever les bordures
+    setSelectedId(null)
     try {
-      // Petit délai pour laisser le temps au DOM de se mettre à jour
       await new Promise(r => setTimeout(r, 100))
       const dataUrl = await toPng(canvasRef.current, { quality: 1, pixelRatio: 3 })
       const link = document.createElement('a')
@@ -130,7 +129,7 @@ export default function FlyersPage() {
                   })
                 }}
                 bounds="parent"
-                onClick={(e) => { e.stopPropagation(); setSelectedId(item.id) }}
+                onClick={(e: React.MouseEvent) => { e.stopPropagation(); setSelectedId(item.id) }}
                 className={`flex items-center justify-center ${selectedId === item.id ? 'border-2 border-dashed border-sky-500 bg-sky-500/10' : ''}`}
               >
                 <textarea
