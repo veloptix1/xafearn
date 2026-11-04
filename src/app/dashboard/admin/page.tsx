@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { EmailForm, AdminUserRow, TaskAdminSection } from './EmailComponents'
+import { EmailForm, AdminUserRow, TaskAdminSection, WithdrawalAdminSection } from './EmailComponents'
 
 // --- ACTIONS ---
 async function updateCampaignStatus(formData: FormData) {
@@ -93,6 +93,9 @@ async function AdminContent() {
 
       {/* 1.5 TÂCHES EN ATTENTE */}
       <TaskAdminSection />
+
+      {/* 1.7 RETRAITS EN ATTENTE */}
+      <WithdrawalAdminSection />
 
       {/* 2. PREUVES */}
       <div>

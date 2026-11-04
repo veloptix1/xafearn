@@ -330,3 +330,117 @@ export function TaskAdminSection() {
     </div>
   )
 }
+
+
+export function WithdrawalAdminSection() {
+  const [withdrawals, setWithdrawals] = useState<any[]>([])
+  const [users, setUsers] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState<string | null>(null)
+  const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    async function load() {
+      const { data: w } = await supabase.from('withdrawals').select('*').eq('status', 'pending').order('created_at', { ascending: true })
+      setWithdrawals(w || [])
+      
+      const { data: u } = await supabase.from('profiles').select('*')
+      setUsers(u || [])
+      
+      setLoading(false)
+    }
+    load()
+  }, [supabase])
+
+  const getUser = (id: string) => users.find(u => u.id === id)
+
+  const handlePay = async (withdrawal: any) => {
+    setLoading(true)
+
+    // 1. Mettre à jour le statut
+    await supabase.from('withdrawals').update({ status: 'paid' }).eq('id', withdrawal.id)
+
+    // 2. Notification à l'utilisateur
+    await supabase.from('notifications').insert({
+      user_id: withdrawal.user_id,
+      title: 'Retrait payé ! 🎉',
+      message: `Tes ${withdrawal.net_amount} FCFA ont été envoyés sur ton compte ${withdrawal.operator} (${withdrawal.phone_number}).`,
+      link: '/dashboard/historique'
+    })
+
+    setToast('Retrait marqué comme payé !')
+    setLoading(false)
+    setTimeout(() => { setToast(null); router.refresh() }, 2000)
+  }
+
+  const handleReject = async (withdrawal: any) => {
+    setLoading(true)
+
+    // 1. Rembourser le solde
+    const user = getUser(withdrawal.user_id)
+    if (user) {
+      await supabase.from('profiles').update({ balance: (user.balance || 0) + withdrawal.amount }).eq('id', user.id)
+    }
+
+    // 2. Mettre à jour le statut
+    await supabase.from('withdrawals').update({ status: 'rejected' }).eq('id', withdrawal.id)
+
+    // 3. Notification
+    await supabase.from('notifications').insert({
+      user_id: withdrawal.user_id,
+      title: 'Retrait rejeté ❌',
+      message: `Ta demande de retrait de ${withdrawal.amount} FCFA a été rejetée. Le montant a été remboursé sur ton solde.`,
+      link: '/dashboard/historique'
+    })
+
+    setToast('Retrait rejeté et solde remboursé.')
+    setLoading(false)
+    setTimeout(() => { setToast(null); router.refresh() }, 2000)
+  }
+
+  if (loading) return <div className="text-center py-4 text-slate-500">Chargement...</div>
+
+  return (
+    <div>
+      <h2 className="text-xl font-bold text-slate-900 mb-4">Retraits en attente ({withdrawals.length})</h2>
+      {toast && <div className="bg-slate-900 text-white p-2 rounded-xl text-center text-sm font-bold mb-3">{toast}</div>}
+      
+      {withdrawals.length === 0 ? (
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">Aucun retrait en attente.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {withdrawals.map((w: any) => {
+            const user = getUser(w.user_id)
+            return (
+              <div key={w.id} className="bg-white border-2 border-sky-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-bold text-slate-900 text-sm">{user?.full_name || 'Inconnu'}</h3>
+                    <p className="text-xs text-slate-500">{user?.email}</p>
+                  </div>
+                  <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-1 rounded">EN ATTENTE</span>
+                </div>
+                
+                <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 my-3">
+                  <p><span className="text-slate-500">Montant :</span> <strong>{w.amount} FCFA</strong></p>
+                  <p><span className="text-slate-500">Frais (5%) :</span> <strong>{w.fee} FCFA</strong></p>
+                  <p><span className="text-slate-500">Net à envoyer :</span> <strong className="text-emerald-600">{w.net_amount} FCFA</strong></p>
+                  <p><span className="text-slate-500">Pays :</span> <strong>{w.country}</strong></p>
+                  <p><span className="text-slate-500">Opérateur :</span> <strong>{w.operator}</strong></p>
+                  <p><span className="text-slate-500">Téléphone :</span> <strong>{w.phone_number}</strong></p>
+                  <p><span className="text-slate-500">Nom :</span> <strong>{w.full_name}</strong></p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button onClick={() => handlePay(w)} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Marquer Payé</button>
+                  <button onClick={() => handleReject(w)} className="flex-1 py-2 bg-red-50 text-red-600 border border-red-200 font-bold text-sm rounded-lg">Rejeter</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
