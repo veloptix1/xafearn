@@ -13,7 +13,7 @@ export default function ReseauPage() {
   const [posts, setPosts] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'pour-toi' | 'recents' | 'top'>('pour-toi')
   
-  // Système de toast
+  // Toast
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
 
@@ -22,12 +22,12 @@ export default function ReseauPage() {
   const [newText, setNewText] = useState('')
   const [newImage, setNewImage] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Envoi de jetons
   const [activePost, setActivePost] = useState<any>(null)
   const [coinAmount, setCoinAmount] = useState(10)
   const [isSending, setIsSending] = useState(false)
+  const [floatingCoins, setFloatingCoins] = useState<{id: number, x: number}[]>([])
 
   // Commentaires
   const [activeCommentPost, setActiveCommentPost] = useState<any>(null)
@@ -53,7 +53,6 @@ export default function ReseauPage() {
     } else if (activeTab === 'top') {
       query = query.order('total_coins_received', { ascending: false })
     } else {
-      // "Pour toi" = mélange (ici on fait simple, on trie par date)
       query = query.order('created_at', { ascending: false })
     }
 
@@ -74,11 +73,8 @@ export default function ReseauPage() {
           let width = img.width
           let height = img.height
           const MAX_SIZE = 800
-          if (width > height && width > MAX_SIZE) {
-            height *= MAX_SIZE / width; width = MAX_SIZE
-          } else if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height; height = MAX_SIZE
-          }
+          if (width > height && width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE }
+          else if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE }
           canvas.width = width; canvas.height = height
           const ctx = canvas.getContext('2d')
           ctx?.drawImage(img, 0, 0, width, height)
@@ -131,6 +127,11 @@ export default function ReseauPage() {
     
     setIsSending(true)
     try {
+      // Animation des pièces
+      const newCoin = { id: Date.now(), x: Math.random() * 100 - 50 }
+      setFloatingCoins(prev => [...prev, newCoin])
+      setTimeout(() => setFloatingCoins(prev => prev.filter(c => c.id !== newCoin.id)), 1000)
+
       await supabase.from('coin_transactions').insert({
         sender_id: profile.id, receiver_id: activePost.user_id, post_id: activePost.id,
         coins_amount: coinAmount, fcfc_value: coinAmount
@@ -142,7 +143,7 @@ export default function ReseauPage() {
         user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
         message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`, link: '/dashboard/jetons/retirer'
       })
-      showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
+      
       setActivePost(null)
       loadPosts()
     } catch (err) {
@@ -185,21 +186,20 @@ export default function ReseauPage() {
     <main className="min-h-screen bg-black text-white relative overflow-hidden">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* HEADER (Transparent) */}
+      {/* HEADER TRANSPARENT (TikTok Style) */}
       <header className="absolute top-0 inset-x-0 z-50 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-black/80 to-transparent">
         <Link href="/dashboard" className="text-white bg-white/20 p-2 rounded-full backdrop-blur-md">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
         
-        {/* Onglets */}
         <div className="flex gap-4 text-sm font-bold">
-          <button onClick={() => setActiveTab('pour-toi')} className={activeTab === 'pour-toi' ? 'text-white' : 'text-white/50'}>Pour toi</button>
-          <button onClick={() => setActiveTab('recents')} className={activeTab === 'recents' ? 'text-white' : 'text-white/50'}>Récents</button>
-          <button onClick={() => setActiveTab('top')} className={activeTab === 'top' ? 'text-white' : 'text-white/50'}>Top</button>
+          <button onClick={() => setActiveTab('pour-toi')} className={`transition ${activeTab === 'pour-toi' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}`}>Pour toi</button>
+          <button onClick={() => setActiveTab('recents')} className={`transition ${activeTab === 'recents' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}`}>Récents</button>
+          <button onClick={() => setActiveTab('top')} className={`transition ${activeTab === 'top' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}`}>Top</button>
         </div>
 
         <div className="flex items-center gap-2">
-          <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full">+ Acheter</Link>
+          <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full shadow-lg">+ Acheter</Link>
           <div className="bg-white/20 px-2 py-1.5 rounded-full text-xs font-bold backdrop-blur-md">🪙 {profile?.coins_balance || 0}</div>
         </div>
       </header>
@@ -209,7 +209,7 @@ export default function ReseauPage() {
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* FEED VERTICAL */}
+      {/* FEED VERTICAL PLEIN ÉCRAN */}
       <div className="h-screen overflow-y-scroll snap-y snap-mandatory hide-scrollbar">
         {posts.length === 0 ? (
           <div className="h-screen flex flex-col items-center justify-center text-center p-6">
@@ -219,6 +219,8 @@ export default function ReseauPage() {
         ) : (
           posts.map(post => (
             <div key={post.id} className="h-screen w-full snap-start relative flex items-center justify-center bg-slate-900">
+              
+              {/* Image ou Texte */}
               {post.content_type === 'image' && post.image_url ? (
                 <img src={post.image_url} className="w-full h-full object-cover" />
               ) : (
@@ -227,14 +229,19 @@ export default function ReseauPage() {
                 </div>
               )}
 
-              {/* Overlay sombre en bas */}
+              {/* Overlay dégradé pour lisibilité */}
               <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black via-black/60 to-transparent pointer-events-none"></div>
 
-              {/* Infos & Actions (En bas à gauche) */}
+              {/* Infos Créateur (En bas à gauche) */}
               <div className="absolute bottom-6 left-4 right-20 z-10">
-                <p className="font-bold text-lg mb-1">@{post.profiles?.full_name}</p>
-                <p className="text-sm text-slate-200 mb-3">{post.text_content}</p>
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full w-max backdrop-blur-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-xs font-bold backdrop-blur-md">
+                    {post.profiles?.full_name?.charAt(0)}
+                  </div>
+                  <p className="font-bold text-md">@{post.profiles?.full_name}</p>
+                </div>
+                <p className="text-sm text-slate-200 mb-3 line-clamp-2">{post.text_content}</p>
+                <div className="flex items-center gap-2 text-xs font-bold text-amber-400 bg-amber-400/10 px-3 py-1 rounded-full w-max backdrop-blur-sm border border-amber-400/20">
                   🪙 {post.total_coins_received || 0} jetons reçus
                 </div>
               </div>
@@ -243,7 +250,7 @@ export default function ReseauPage() {
               <div className="absolute bottom-6 right-4 z-10 flex flex-col items-center gap-6">
                 {/* Bouton Cadeau */}
                 <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/40 hover:scale-110 transition mb-1">
+                  <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/40 hover:scale-110 transition mb-1 relative">
                     <svg className="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                   </div>
                   <span className="text-[10px] font-bold">Soutenir</span>
@@ -262,16 +269,16 @@ export default function ReseauPage() {
         )}
       </div>
 
-      {/* MODAL DE CRÉATION DE POST (inchangé) */}
+      {/* MODAL DE CRÉATION DE POST */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 animate-in zoom-in-95">
             <h2 className="font-bold text-lg mb-4">Créer une publication</h2>
             <form onSubmit={handleCreatePost} className="space-y-4">
               <textarea placeholder="Quoi de neuf ?" value={newText} onChange={e => setNewText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" rows={4} />
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative">
-                <input type="file" accept="image/*" onChange={e => setNewImage(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" ref={fileInputRef} />
-                {newImage ? <p className="text-sm text-emerald-600 font-medium">Image sélectionnée</p> : <p className="text-sm text-slate-500">Ajouter une image</p>}
+                <input type="file" accept="image/*" onChange={e => setNewImage(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                {newImage ? <p className="text-sm text-emerald-600 font-medium">Image sélectionnée (compressée)</p> : <p className="text-sm text-slate-500">Ajouter une image</p>}
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
@@ -284,10 +291,18 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* MODAL DE JETONS (inchangé) */}
+      {/* MODAL DE JETONS */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900 animate-in slide-in-from-bottom-10 relative overflow-hidden">
+            
+            {/* Animation de pièces volantes */}
+            {floatingCoins.map(coin => (
+              <div key={coin.id} className="absolute bottom-10 left-1/2 text-4xl animate-float-up pointer-events-none" style={{ transform: `translateX(${coin.x}px)` }}>
+                🪙
+              </div>
+            ))}
+
             <h2 className="text-xl font-bold mb-2 text-center">Soutenir @{activePost.profiles?.full_name}</h2>
             <p className="text-sm text-slate-500 text-center mb-6">Solde : <strong className="text-amber-600">{profile?.coins_balance || 0} jetons</strong></p>
             <div className="space-y-3 mb-6">
@@ -310,7 +325,7 @@ export default function ReseauPage() {
       {/* PANNEAU DE COMMENTAIRES */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
-          <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
+          <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
             <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-100">
               <h3 className="font-bold text-lg">{comments.length} commentaires</h3>
               <button onClick={() => setActiveCommentPost(null)} className="text-slate-400 hover:text-slate-900">✕</button>
