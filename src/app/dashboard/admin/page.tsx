@@ -36,7 +36,6 @@ async function deleteUser(formData: FormData) {
   revalidatePath('/dashboard/admin')
 }
 
-// ⚠️ C'EST ICI QUE LA MAGIE OPÈRE
 async function validateSubmission(formData: FormData) {
   'use server'
   const supabase = await createClient()
@@ -48,31 +47,52 @@ async function validateSubmission(formData: FormData) {
 
   const { data: sub } = await supabase
     .from('ad_submissions')
-    .select('*, profiles(balance, level, email, full_name)')
+    .select('*, profiles(balance, level, email, full_name), campaigns(is_welcome_campaign, title)')
     .eq('id', id)
     .single()
   
   if (sub && sub.profiles) {
-    // Calcul du gain selon le niveau
-    const gainPerView = sub.profiles.level === 1 ? 0.50 : sub.profiles.level === 2 ? 1.25 : 1.75
-    const totalGain = gainPerView * views
-    
-    // 1. On crédite le compte
-    await supabase.from('profiles').update({
-      balance: (sub.profiles.balance || 0) + totalGain
-    }).eq('id', sub.user_id)
-
-    // 2. On valide la soumission avec le nombre de vues saisi
+    // 1. On valide la soumission
     await supabase.from('ad_submissions').update({ 
       status: 'validated',
       views_count: views
     }).eq('id', id)
 
-    // 3. On envoie l'email
-    try {
-      const { sendValidationEmail } = await import('@/lib/email/send')
-      await sendValidationEmail(sub.profiles.email, sub.profiles.full_name, views, totalGain)
-    } catch (e) { console.log('Email non envoyé', e) }
+    // 2. Si c'est l'annonce test : on débloque le compte, mais ON NE PAIE PAS
+    if (sub.campaigns?.is_welcome_campaign) {
+      // Désactiver le mode test
+      await supabase.from('profiles').update({ is_test_mode: false }).eq('id', sub.user_id)
+      
+      // Notification spéciale
+      await supabase.from('notifications').insert({
+        user_id: sub.user_id,
+        title: 'Mode test terminé 🚀',
+        message: 'Félicitations ! Tu as validé ton annonce test. Toutes les campagnes payantes sont maintenant débloquées.',
+        link: '/dashboard/annonces'
+      })
+    } else {
+      // 3. Si c'est une annonce PAYANTE : on calcule et crédite le solde
+      const gainPerView = sub.profiles.level === 1 ? 0.50 : sub.profiles.level === 2 ? 1.25 : 1.75
+      const totalGain = gainPerView * views
+      
+      await supabase.from('profiles').update({
+        balance: (sub.profiles.balance || 0) + totalGain
+      }).eq('id', sub.user_id)
+
+      // Notification de gain
+      await supabase.from('notifications').insert({
+        user_id: sub.user_id,
+        title: 'Diffusion validée ✅',
+        message: `Ta diffusion pour "${sub.campaigns?.title}" a été validée. Tu as gagné ${totalGain.toFixed(2)} FCFA.`,
+        link: '/dashboard'
+      })
+
+      // Email de gain
+      try {
+        const { sendValidationEmail } = await import('@/lib/email/send')
+        await sendValidationEmail(sub.profiles.email, sub.profiles.full_name, views, totalGain)
+      } catch (e) { console.log('Email non envoyé', e) }
+    }
   }
 
   revalidatePath('/dashboard/admin')
@@ -82,7 +102,21 @@ async function validateSubmission(formData: FormData) {
 async function rejectSubmission(formData: FormData) {
   'use server'
   const supabase = await createClient()
-  await supabase.from('ad_submissions').update({ status: 'rejected' }).eq('id', formData.get('id') as string)
+  const id = formData.get('id') as string
+  
+  const { data: sub } = await supabase.from('ad_submissions').select('user_id, campaigns(title)').eq('id', id).single()
+  
+  await supabase.from('ad_submissions').update({ status: 'rejected' }).eq('id', id)
+  
+  if (sub) {
+    await supabase.from('notifications').insert({
+      user_id: sub.user_id,
+      title: 'Preuve rejetée ❌',
+      message: `Ta preuve pour "${sub.campaigns?.title}" a été rejetée. Vérifie qu'elle est bien conforme.`,
+      link: '/dashboard/annonces'
+    })
+  }
+  
   revalidatePath('/dashboard/admin')
 }
 
@@ -93,67 +127,65 @@ async function AdminContent() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return redirect('/login')
 
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!profile || profile.role !== 'admin') {
+  const { data: profile } = await supabase.from('profiles').select('role, is_admin').eq('id', user.id).single()
+  if (!profile || (profile.role !== 'admin' && !profile.is_admin)) {
     return <div className="text-center py-20 text-red-500 font-bold">Accès refusé</div>
   }
 
   const { data: campaigns } = await supabase.from('campaigns').select('*, profiles!fk_campaigns_profiles(full_name, email)').order('created_at', { ascending: false })
-  const { data: submissions } = await supabase.from('ad_submissions').select('*, profiles(full_name, email, level, balance), campaigns(title)').order('created_at', { ascending: false })
+  const { data: submissions } = await supabase.from('ad_submissions').select('*, profiles(full_name, email, level, balance), campaigns(title, is_welcome_campaign)').order('created_at', { ascending: false })
   const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
 
   return (
     <div className="space-y-10">
       
-      {/* 1. PREUVES À VALIDER */}
+      {/* 1. PREUVES EN ATTENTE */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-          Preuves en attente ({submissions?.filter((s: any) => s.status === 'pending').length || 0})
-        </h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Preuves en attente ({submissions?.filter((s: any) => s.status === 'pending').length || 0})</h2>
         
         {submissions?.filter((s: any) => s.status === 'pending').length === 0 ? (
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">
-            Aucune preuve en attente de validation.
-          </div>
+          <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">Aucune preuve en attente.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {submissions?.filter((s: any) => s.status === 'pending').map((s: any) => {
               const gainPerView = s.profiles?.level === 1 ? 0.50 : s.profiles?.level === 2 ? 1.25 : 1.75
+              const isTest = s.campaigns?.is_welcome_campaign
+              
               return (
-                <div key={s.id} className="bg-white border-2 border-amber-200 rounded-2xl shadow-sm p-4">
+                <div key={s.id} className={`bg-white border-2 rounded-2xl shadow-sm p-4 ${isTest ? 'border-purple-300' : 'border-amber-200'}`}>
                   <div className="flex justify-between items-start mb-3">
                     <div>
                       <h3 className="font-bold text-slate-900 text-sm">{s.campaigns?.title}</h3>
                       <p className="text-xs text-slate-500">{s.profiles?.full_name}</p>
-                      <span className="inline-block mt-1 bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200">
-                        Niveau {s.profiles?.level} • {gainPerView.toFixed(2)} F/vue
-                      </span>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        <span className="bg-amber-50 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded border border-amber-200">
+                          Niveau {s.profiles?.level}
+                        </span>
+                        {isTest ? (
+                          <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200">
+                            ANNONCE TEST (Sans paiement)
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">
+                            {gainPerView.toFixed(2)} F/vue
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  {/* VIDÉO DE PREUVE */}
-                  {s.proof_type === 'video' && s.proof_video_url ? (
+                  {s.proof_video_url && (
                     <video src={s.proof_video_url} controls className="w-full max-h-48 rounded-lg bg-black mb-3" />
-                  ) : s.proof_type === 'qr_code' ? (
-                    <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-600 mb-3 font-mono border border-slate-200">
-                      Code PIN / QR : {s.qr_scan_token || s.whatsapp_pin_code || 'Non généré'}
-                    </div>
-                  ) : (
-                    <div className="bg-slate-50 p-3 rounded-lg text-xs text-slate-500 mb-3">
-                      Aucune preuve visuelle fournie.
-                    </div>
                   )}
 
-                  {/* FORMULAIRE DE VALIDATION MANUELLE */}
                   <form action={validateSubmission} className="flex gap-2 items-end mt-2">
                     <input type="hidden" name="id" value={s.id} />
                     <div className="flex-1">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vues vérifiées</label>
-                      <input type="number" name="views" required placeholder="Ex: 150" className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:border-emerald-500 outline-none" />
+                      <input type="number" name="views" required defaultValue={1000} className="w-full p-2 border border-slate-300 rounded-lg text-sm focus:border-emerald-500 outline-none" />
                     </div>
                     <button type="submit" className="px-4 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg hover:bg-emerald-400 transition">
-                      Valider
+                      {isTest ? 'Valider le test' : 'Valider & Payer'}
                     </button>
                   </form>
                   
@@ -172,10 +204,7 @@ async function AdminContent() {
 
       {/* 2. UTILISATEURS */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <svg className="w-5 h-5 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
-          Utilisateurs ({users?.length || 0})
-        </h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Utilisateurs ({users?.length || 0})</h2>
         <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
@@ -183,6 +212,7 @@ async function AdminContent() {
                 <tr>
                   <th className="px-4 py-3">Utilisateur</th>
                   <th className="px-4 py-3">Rôle</th>
+                  <th className="px-4 py-3">Mode Test</th>
                   <th className="px-4 py-3">Solde</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
@@ -194,7 +224,17 @@ async function AdminContent() {
                       <div className="font-bold text-slate-900">{u.full_name || 'Inconnu'}</div>
                       <div className="text-xs text-slate-500">{u.email}</div>
                     </td>
-                    <td className="px-4 py-3 capitalize">{u.role}</td>
+                    <td className="px-4 py-3 capitalize">
+                      {u.role} 
+                      {u.is_admin && <span className="bg-amber-100 text-amber-700 text-[10px] px-1 rounded ml-1">ADMIN</span>}
+                    </td>
+                    <td className="px-4 py-3">
+                      {u.is_test_mode ? (
+                        <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-1 rounded">Actif</span>
+                      ) : (
+                        <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">Terminé</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-bold text-emerald-600">{u.balance} F</td>
                     <td className="px-4 py-3 text-right flex justify-end gap-2">
                       <form action={toggleBlockUser}>
@@ -219,10 +259,7 @@ async function AdminContent() {
 
       {/* 3. CAMPAGNES */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4 flex items-center gap-2">
-          <svg className="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
-          Campagnes ({campaigns?.length || 0})
-        </h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">Campagnes ({campaigns?.length || 0})</h2>
         <div className="grid grid-cols-1 gap-3">
           {campaigns?.map((c: any) => (
             <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-3 flex flex-col md:flex-row gap-4 items-start md:items-center">
@@ -233,18 +270,12 @@ async function AdminContent() {
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : c.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{c.status}</span>
+                {c.is_welcome_campaign && <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-1 rounded">TEST</span>}
                 {c.status === 'pending' && (
                   <form action={updateCampaignStatus}>
                     <input type="hidden" name="id" value={c.id} />
                     <input type="hidden" name="status" value="active" />
                     <button type="submit" className="px-3 py-1 bg-emerald-500 text-white text-xs font-bold rounded hover:bg-emerald-400">Approuver</button>
-                  </form>
-                )}
-                {c.status !== 'rejected' && (
-                  <form action={updateCampaignStatus}>
-                    <input type="hidden" name="id" value={c.id} />
-                    <input type="hidden" name="status" value="rejected" />
-                    <button type="submit" className="px-3 py-1 bg-amber-100 text-amber-700 text-xs font-bold rounded hover:bg-amber-200">Rejeter</button>
                   </form>
                 )}
                 <form action={deleteCampaign}>
