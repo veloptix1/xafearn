@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-export default function NotificationsPage() {
+export default function NotificationsSettingsPage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -12,27 +12,26 @@ export default function NotificationsPage() {
   const [toast, setToast] = useState<string | null>(null)
   
   const [prefs, setPrefs] = useState({
-    notif_new_campaigns: true,
-    notif_campaign_validated: true,
-    notif_reminders: true,
-    notif_payments: true,
-    notif_promotions: false,
-    notif_newsletter: false,
+    email_on_new_campaign: true,
+    email_on_validation: true,
+    email_on_rejection: true,
+    email_on_payment: true,
+    email_on_newsletter: false,
   })
 
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
+      
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       if (data) {
         setPrefs({
-          notif_new_campaigns: data.notif_new_campaigns ?? true,
-          notif_campaign_validated: data.notif_campaign_validated ?? true,
-          notif_reminders: data.notif_reminders ?? true,
-          notif_payments: data.notif_payments ?? true,
-          notif_promotions: data.notif_promotions ?? false,
-          notif_newsletter: data.notif_newsletter ?? false,
+          email_on_new_campaign: data.email_on_new_campaign ?? true,
+          email_on_validation: data.email_on_validation ?? true,
+          email_on_rejection: data.email_on_rejection ?? true,
+          email_on_payment: data.email_on_payment ?? true,
+          email_on_newsletter: data.email_on_newsletter ?? false,
         })
       }
       setLoading(false)
@@ -58,12 +57,11 @@ export default function NotificationsPage() {
   }
 
   const options = [
-    { key: 'notif_new_campaigns', title: 'Nouvelles campagnes', desc: 'Soyez alerté quand une nouvelle annonce est disponible.' },
-    { key: 'notif_campaign_validated', title: 'Validation de diffusion', desc: 'Recevez un message quand vos gains sont validés.' },
-    { key: 'notif_reminders', title: 'Rappels de vérification', desc: 'Un rappel 24h après votre publication.' },
-    { key: 'notif_payments', title: 'Paiements & Retraits', desc: 'Alertes lors du traitement de vos retraits.' },
-    { key: 'notif_promotions', title: 'Promotions', desc: 'Offres spéciales et bonus de la plateforme.' },
-    { key: 'notif_newsletter', title: 'Newsletter', desc: 'Conseils et actualités XAFERAN par email.' },
+    { key: 'email_on_new_campaign', title: 'Nouvelles campagnes', desc: 'Recevoir un email quand une nouvelle annonce est disponible.' },
+    { key: 'email_on_validation', title: 'Validation de diffusion', desc: 'Recevoir un email quand vos gains sont validés.' },
+    { key: 'email_on_rejection', title: 'Rejet de preuve', desc: 'Recevoir un email si votre preuve est rejetée.' },
+    { key: 'email_on_payment', title: 'Paiements & Retraits', desc: 'Recevoir un email à chaque demande de retrait.' },
+    { key: 'email_on_newsletter', title: 'Newsletter XAFERAN', desc: 'Conseils, astuces et actualités de la plateforme.' },
   ]
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Chargement...</div>
