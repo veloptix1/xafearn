@@ -9,6 +9,7 @@ export default function AdminTreasuresPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [treasures, setTreasures] = useState<any[]>([])
+  const [winners, setWinners] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
 
@@ -17,15 +18,14 @@ export default function AdminTreasuresPage() {
   const [sponsorLogo, setSponsorLogo] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [secretCode, setSecretCode] = useState('')
-  const [durationHours, setDurationHours] = useState('24')
   const [links, setLinks] = useState<any[]>([])
 
   // Calcul des paliers
   const getTier = (amount: number) => {
-    if (amount >= 50000) return { name: 'diamant', fee: 0.15, winners: [0.40, 0.25, 0.15, 0.10, 0.10], time: 72 }
-    if (amount >= 10000) return { name: 'or', fee: 0.20, winners: [0.50, 0.30, 0.20], time: 48 }
-    if (amount >= 5000) return { name: 'argent', fee: 0.25, winners: [0.70, 0.30], time: 36 }
-    return { name: 'bronze', fee: 0.30, winners: [1.0], time: 24 }
+    if (amount >= 50000) return { name: 'diamant', fee: 0.15, winners: [0.40, 0.25, 0.15, 0.10, 0.10], time: 72, color: 'purple' }
+    if (amount >= 10000) return { name: 'or', fee: 0.20, winners: [0.50, 0.30, 0.20], time: 48, color: 'amber' }
+    if (amount >= 5000) return { name: 'argent', fee: 0.25, winners: [0.70, 0.30], time: 36, color: 'slate' }
+    return { name: 'bronze', fee: 0.30, winners: [1.0], time: 24, color: 'orange' }
   }
 
   const amount = parseFloat(totalAmount) || 0
@@ -34,18 +34,31 @@ export default function AdminTreasuresPage() {
   const prizePool = amount - platformFee
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
-      
-      const { data } = await supabase.from('treasures').select('*').order('created_at', { ascending: false })
-      setTreasures(data || [])
-      setLoading(false)
+    loadData()
+  }, [])
+
+  async function loadData() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return router.push('/login')
+    
+    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
+    
+    // Charger les coffres
+    const { data: t } = await supabase.from('treasures').select('*').order('created_at', { ascending: false })
+    setTreasures(t || [])
+
+    // Charger les gagnants avec leurs infos
+    if (t && t.length > 0) {
+      const { data: w } = await supabase
+        .from('treasure_winners')
+        .select('*, profiles(full_name, email)')
+        .in('treasure_id', t.map(x => x.id))
+      setWinners(w || [])
     }
-    load()
-  }, [router, supabase])
+    
+    setLoading(false)
+  }
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
@@ -92,7 +105,19 @@ export default function AdminTreasuresPage() {
     showToast('Coffre-fort créé avec succès !')
     setIsModalOpen(false)
     setSponsorName(''); setSponsorLogo(''); setTotalAmount(''); setSecretCode(''); setLinks([])
-    window.location.reload()
+    loadData()
+  }
+
+  const deleteTreasure = async (id: string) => {
+    if (!confirm('Supprimer ce coffre ? Cette action est irréversible.')) return
+    await supabase.from('treasures').delete().eq('id', id)
+    loadData()
+  }
+
+  const closeTreasure = async (id: string) => {
+    if (!confirm('Clôturer ce coffre ? Les utilisateurs ne pourront plus participer.')) return
+    await supabase.from('treasures').update({ status: 'completed' }).eq('id', id)
+    loadData()
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>
@@ -109,25 +134,65 @@ export default function AdminTreasuresPage() {
         <button onClick={() => setIsModalOpen(true)} className="px-4 py-2 bg-amber-500 text-white text-sm font-bold rounded-xl hover:bg-amber-400">+ Nouveau Coffre</button>
       </header>
 
-      <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-3">
+      <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-4">
         {toast && <div className="bg-slate-900 text-white p-3 rounded-xl text-center text-sm font-bold">{toast}</div>}
         
-        {treasures.map(t => (
-          <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-slate-900">{t.sponsor_name}</h3>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-100 text-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-700`}>{t.tier}</span>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${t.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{t.status}</span>
-              </div>
-              <p className="text-sm text-slate-500 mt-1">Trésor : <strong className="text-amber-600">{t.prize_pool} F</strong> (Total payé: {t.total_amount} F)</p>
-              <p className="text-xs text-slate-400">Code secret : {t.secret_code} • Expire : {new Date(t.expires_at).toLocaleString('fr-FR')}</p>
-            </div>
-            <div className="flex gap-2">
-              <button onClick={async () => { await supabase.from('treasures').update({ status: 'expired' }).eq('id', t.id); window.location.reload() }} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Clôturer</button>
-            </div>
+        {treasures.length === 0 ? (
+          <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500">
+            Aucun coffre créé pour le moment.
           </div>
-        ))}
+        ) : (
+          treasures.map(t => {
+            const treasureWinners = winners.filter(w => w.treasure_id === t.id)
+            const isExpired = new Date(t.expires_at) < new Date()
+            
+            return (
+              <div key={t.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-slate-100 pb-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-bold text-lg text-slate-900">{t.sponsor_name}</h3>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-100 text-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-700`}>{t.tier}</span>
+                      {t.status === 'active' && !isExpired ? (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Actif</span>
+                      ) : (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">Terminé</span>
+                      )}
+                    </div>
+                    <p className="text-sm text-slate-600">Trésor : <strong className="text-amber-600">{t.prize_pool.toLocaleString('fr-FR')} F</strong> • Total payé : {t.total_amount.toLocaleString('fr-FR')} F</p>
+                    <p className="text-xs text-slate-400 mt-1">Code : <strong>{t.secret_code}</strong> • Expire le {new Date(t.expires_at).toLocaleString('fr-FR')}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    {t.status === 'active' && (
+                      <button onClick={() => closeTreasure(t.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg">Clôturer</button>
+                    )}
+                    <button onClick={() => deleteTreasure(t.id)} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Supprimer</button>
+                  </div>
+                </div>
+
+                {/* Liste des gagnants */}
+                <div>
+                  <p className="text-xs font-bold text-slate-500 uppercase mb-2">Gagnants ({treasureWinners.length})</p>
+                  {treasureWinners.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">Aucun gagnant pour le moment.</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {treasureWinners.sort((a, b) => a.rank - b.rank).map(w => (
+                        <div key={w.id} className="flex justify-between items-center bg-slate-50 p-2 rounded-lg text-sm">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 bg-amber-100 text-amber-700 rounded-full flex items-center justify-center text-[10px] font-bold">{w.rank}</span>
+                            <span className="font-medium text-slate-700">{w.profiles?.full_name}</span>
+                          </div>
+                          <span className="font-bold text-emerald-600">{w.prize_amount.toFixed(0)} F</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )
+          })
+        )}
       </div>
 
       {/* MODAL DE CRÉATION */}
@@ -157,10 +222,7 @@ export default function AdminTreasuresPage() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-3">
-                <input type="text" required placeholder="Code secret (ex: XAFEARN2026)" value={secretCode} onChange={e => setSecretCode(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase" />
-                <div className="w-full p-3 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-500">Durée : {tierInfo.time}h</div>
-              </div>
+              <input type="text" required placeholder="Code secret (ex: XAFEARN2026)" value={secretCode} onChange={e => setSecretCode(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase font-bold" />
 
               <div>
                 <div className="flex justify-between items-center mb-2">
