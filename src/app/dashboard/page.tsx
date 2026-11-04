@@ -87,29 +87,39 @@ async function DashboardData() {
       <div className="md:col-span-1 space-y-4">
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1">Services</h2>
         
-        <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-sky-300 hover:shadow-md transition group">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 group-hover:bg-sky-100 transition">
+        <div className="grid grid-cols-2 gap-3">
+          <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-sky-300 hover:shadow-md transition group">
+            <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 group-hover:bg-sky-100 transition mb-3">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
             </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-slate-900 text-sm">Diffuser / Créer</h3>
-              <p className="text-xs text-slate-500">Gérer mes annonces</p>
-            </div>
-          </div>
-        </Link>
-        
-        <Link href="/dashboard/equipe" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition group">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-100 transition">
+            <h3 className="font-bold text-slate-900 text-sm">Diffuser</h3>
+            <p className="text-[10px] text-slate-500">Gérer mes annonces</p>
+          </Link>
+
+          <Link href="/dashboard/equipe" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition group">
+            <div className="w-10 h-10 bg-indigo-50 rounded-xl flex items-center justify-center text-indigo-500 group-hover:bg-indigo-100 transition mb-3">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
-            <div className="flex-1">
-              <h3 className="font-bold text-slate-900 text-sm">Mon Équipe</h3>
-              <p className="text-xs text-slate-500">Gère tes agents</p>
+            <h3 className="font-bold text-slate-900 text-sm">Équipe</h3>
+            <p className="text-[10px] text-slate-500">Gérer mes agents</p>
+          </Link>
+
+          <Link href="/dashboard/statut-ia" className="block bg-gradient-to-br from-purple-50 to-white border border-purple-200 p-4 rounded-2xl shadow-sm hover:border-purple-400 hover:shadow-md transition group">
+            <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-purple-600 group-hover:bg-purple-200 transition mb-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             </div>
-          </div>
-        </Link>
+            <h3 className="font-bold text-purple-900 text-sm">Statut IA</h3>
+            <p className="text-[10px] text-purple-600">Générer avec l'IA</p>
+          </Link>
+
+          <Link href="/dashboard/statut-flash" className="block bg-gradient-to-br from-rose-50 to-white border border-rose-200 p-4 rounded-2xl shadow-sm hover:border-rose-400 hover:shadow-md transition group">
+            <div className="w-10 h-10 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600 group-hover:bg-rose-200 transition mb-3">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <h3 className="font-bold text-rose-900 text-sm">Statut Flash</h3>
+            <p className="text-[10px] text-rose-600">Offres limitées</p>
+          </Link>
+        </div>
       </div>
     </div>
   )
