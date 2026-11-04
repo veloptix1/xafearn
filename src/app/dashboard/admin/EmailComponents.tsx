@@ -362,12 +362,16 @@ export function WithdrawalAdminSection() {
     await supabase.from('withdrawals').update({ status: 'paid' }).eq('id', withdrawal.id)
 
     // 2. Notification à l'utilisateur
-    await supabase.from('notifications').insert({
+    const { error: notifError } = await supabase.from('notifications').insert({
       user_id: withdrawal.user_id,
       title: 'Retrait payé ! 🎉',
       message: `Tes ${withdrawal.net_amount} FCFA ont été envoyés sur ton compte ${withdrawal.operator} (${withdrawal.phone_number}).`,
       link: '/dashboard/historique'
     })
+    
+    if (notifError) {
+      console.error('Erreur notification:', notifError)
+    }
 
     setToast('Retrait marqué comme payé !')
     setLoading(false)
