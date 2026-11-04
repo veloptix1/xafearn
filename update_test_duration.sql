@@ -1,0 +1,3 @@
+-- La fonction handle_new_user n'a pas besoin de changer, 
+-- le mode test est désactivé manuellement par l'admin après validation.
+-- Si tu veux une expiration automatique, on peut ajouter un cron.

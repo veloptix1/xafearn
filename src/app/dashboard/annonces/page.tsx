@@ -10,7 +10,7 @@ async function CatalogueContent() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const isInTestMode = profile?.is_test_mode === true
+  const isInTestMode = profile?.is_test_mode === true && !submissions?.find(s => s.status === 'validated' && s.campaigns?.is_welcome_campaign)
 
   // On récupère toutes les campagnes actives
   const { data: campaigns } = await supabase
