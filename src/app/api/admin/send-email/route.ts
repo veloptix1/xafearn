@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { sendBulkEmail } from '@/lib/email/send'
 
+// On laisse 60 secondes à la fonction pour envoyer les emails
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient()
@@ -18,7 +21,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Champs manquants' }, { status: 400 })
     }
 
+    // On attend la fin de TOUS les envois avant de répondre
     const count = await sendBulkEmail(emails, subject, message)
+    
     return NextResponse.json({ success: true, count })
   } catch (error: any) {
     console.error('Erreur envoi email admin:', error)
