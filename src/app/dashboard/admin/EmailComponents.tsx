@@ -260,27 +260,49 @@ export function TaskAdminSection() {
     load()
   }, [supabase])
 
-  const handleValidate = async (submissionId: string, userId: string, taskId: string, reward: number) => {
+  const handleValidate = async (submissionId: string, userId: string, task: any) => {
     setLoading(true)
 
-    // 1. Mettre à jour la soumission
-    await supabase.from('task_submissions').update({ status: 'approved' }).eq('id', submissionId)
+    let amountToCredit = 0
 
-    // 2. Créditer le solde
-    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
-    if (profile) {
-      await supabase.from('profiles').update({ balance: (profile.balance || 0) + reward }).eq('id', userId)
+    // Calcul du montant selon le type de tâche
+    if (task.type === 'diffusion_duration') {
+      // Pour les diffusions : nombre de vues (défini par l'admin) * gain par vue
+      // On va demander à l'admin de saisir le nombre de vues
+      const viewsStr = prompt('Combien de vues vérifiées pour cette tâche ?', '1000')
+      const views = parseInt(viewsStr || '0')
+      if (views <= 0) {
+        setLoading(false)
+        return
+      }
+      amountToCredit = views * (task.gain_per_view || 0)
+      
+      // Mettre à jour la soumission avec le nombre de vues (si la colonne existe)
+      await supabase.from('task_submissions').update({ 
+        status: 'approved',
+        views_count: views 
+      }).eq('id', submissionId)
+    } else {
+      // Pour les tâches simples : gain fixe
+      amountToCredit = task.reward || 0
+      await supabase.from('task_submissions').update({ status: 'approved' }).eq('id', submissionId)
     }
 
-    // 3. Notification
+    // Créditer le solde
+    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
+    if (profile) {
+      await supabase.from('profiles').update({ balance: (profile.balance || 0) + amountToCredit }).eq('id', userId)
+    }
+
+    // Notification
     await supabase.from('notifications').insert({
       user_id: userId,
       title: 'Tâche validée ✅',
-      message: `Ta tâche a été validée. Tu as gagné ${reward} FCFA.`,
+      message: `Ta tâche a été validée. Tu as gagné ${amountToCredit.toFixed(2)} FCFA.`,
       link: '/dashboard/taches'
     })
 
-    setToast('Tâche validée et solde crédité !')
+    setToast(`Tâche validée ! ${amountToCredit.toFixed(2)} FCFA crédités.`)
     setLoading(false)
     setTimeout(() => { setToast(null); router.refresh() }, 2000)
   }
@@ -309,7 +331,7 @@ export function TaskAdminSection() {
             return (
               <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <h3 className="font-bold text-slate-900 text-sm">{task.title}</h3>
-                <p className="text-xs text-slate-500 mb-3">Gain : {task.reward} FCFA</p>
+                <p className="text-xs text-slate-500 mb-3">{task.type === 'diffusion_duration' ? `Gain : ${task.gain_per_view} F / vue` : `Gain : ${task.reward} FCFA`}</p>
                 {s.proof_screenshot_url && (
                   <div className="mb-3">
                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Capture d'écran</p>
@@ -319,7 +341,7 @@ export function TaskAdminSection() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  <button onClick={() => handleValidate(s.id, s.user_id, s.task_id, task.reward)} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Valider</button>
+                  <button onClick={() => handleValidate(s.id, s.user_id, task)} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Valider</button>
                   <button onClick={() => handleReject(s.id)} className="flex-1 py-2 bg-red-50 text-red-600 font-bold text-sm rounded-lg border border-red-200">Rejeter</button>
                 </div>
               </div>
