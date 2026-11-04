@@ -35,7 +35,7 @@ async function TrackLogic({ paramsPromise }: { paramsPromise: Promise<{ id: stri
 
   const campaign = submission.campaigns
   const whatsapp = campaign.whatsapp_number.replace(/\D/g, '')
-  const message = encodeURIComponent(`Bonjour, je vous contacte suite à votre annonce XAFERAN : ${campaign.title}`)
+  const message = encodeURIComponent(`Bonjour, je vous contacte suite à votre annonce XAFEARN : ${campaign.title}`)
   const whatsappLink = `https://wa.me/${whatsapp}?text=${message}`
 
   return (
@@ -81,7 +81,7 @@ async function TrackLogic({ paramsPromise }: { paramsPromise: Promise<{ id: stri
         </div>
       </div>
       <div className="mt-8 text-center">
-        <p className="text-xs text-slate-400 font-medium">Propulsé par <span className="font-bold text-slate-600">XAFERAN</span></p>
+        <p className="text-xs text-slate-400 font-medium">Propulsé par <span className="font-bold text-slate-600">XAFEARN</span></p>
       </div>
     </div>
   )

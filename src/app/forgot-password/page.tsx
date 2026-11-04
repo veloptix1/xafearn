@@ -46,7 +46,7 @@ export default function ForgotPasswordPage() {
     <main className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
       <div className="w-full max-w-md">
         <Link href="/" className="block text-center mb-6">
-          <img src="/logo.png" alt="XAFERAN" className="h-10 w-auto object-contain mx-auto" />
+          <img src="/logo.png" alt="XAFEARN" className="h-10 w-auto object-contain mx-auto" />
         </Link>
         <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl shadow-sm">
           <h1 className="text-2xl font-black text-slate-900 mb-1 text-center">Mot de passe oublié</h1>

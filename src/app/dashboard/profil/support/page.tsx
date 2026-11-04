@@ -3,7 +3,7 @@ import Link from 'next/link'
 
 export default function SupportPage() {
   const faqs = [
-    { q: "Comment gagner de l'argent sur XAFERAN ?", a: "Publiez les annonces sur votre statut WhatsApp. Chaque clic sur votre lien unique vous rapporte de l'argent." },
+    { q: "Comment gagner de l'argent sur XAFEARN ?", a: "Publiez les annonces sur votre statut WhatsApp. Chaque clic sur votre lien unique vous rapporte de l'argent." },
     { q: "Quand sont validés mes gains ?", a: "L'équipe vérifie vos preuves sous 24h à 48h. Une fois validés, les gains sont ajoutés à votre solde." },
     { q: "Comment retirer mon argent ?", a: "Allez dans 'Retirer' sur votre tableau de bord. Le transfert se fait via Mobile Money (Orange, MTN)." },
     { q: "Puis-je modifier le texte de l'annonce ?", a: "Non. Si vous modifiez le texte ou le lien, les vues ne seront pas comptées." }

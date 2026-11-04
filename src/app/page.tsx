@@ -4,7 +4,7 @@ export default function Home() {
   return (
     <main className="min-h-screen flex flex-col bg-slate-50">
       <nav className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center shadow-sm">
-        <img src="/logo.png" alt="XAFERAN" className="h-8 w-auto object-contain" />
+        <img src="/logo.png" alt="XAFEARN" className="h-8 w-auto object-contain" />
         <div className="flex gap-3">
           <Link href="/login" className="px-4 py-2 text-sm font-semibold text-slate-600 hover:text-slate-900 transition">
             Connexion

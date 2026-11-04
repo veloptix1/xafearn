@@ -5,7 +5,7 @@ export default function ConfidentialitePage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/logo.png" alt="XAFERAN" className="h-7 w-auto object-contain" />
+          <img src="/logo.png" alt="XAFEARN" className="h-7 w-auto object-contain" />
         </Link>
         <Link href="/signup" className="text-sm font-semibold text-sky-500 hover:text-sky-600">
           Retour
@@ -26,7 +26,7 @@ export default function ConfidentialitePage() {
               Introduction
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              Chez <strong>XAFERAN</strong>, la protection de vos données personnelles est une priorité absolue. Cette politique explique quelles données nous collectons, comment nous les utilisons, et quels sont vos droits. En utilisant notre plateforme, vous consentez à cette politique.
+              Chez <strong>XAFEARN</strong>, la protection de vos données personnelles est une priorité absolue. Cette politique explique quelles données nous collectons, comment nous les utilisons, et quels sont vos droits. En utilisant notre plateforme, vous consentez à cette politique.
             </p>
           </section>
 
@@ -127,7 +127,7 @@ export default function ConfidentialitePage() {
               Cookies
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              XAFERAN utilise des cookies pour maintenir votre session connectée et améliorer votre expérience. Vous pouvez désactiver les cookies dans les paramètres de votre navigateur, mais certaines fonctionnalités pourraient ne plus fonctionner correctement.
+              XAFEARN utilise des cookies pour maintenir votre session connectée et améliorer votre expérience. Vous pouvez désactiver les cookies dans les paramètres de votre navigateur, mais certaines fonctionnalités pourraient ne plus fonctionner correctement.
             </p>
           </section>
 

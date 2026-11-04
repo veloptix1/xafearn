@@ -55,7 +55,7 @@ export default function OnboardingPage() {
     <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-6">
       <div className="w-full max-w-lg bg-white border border-slate-200 p-8 rounded-3xl shadow-sm">
         <div className="text-center mb-8">
-          <img src="/logo.png" alt="XAFERAN" className="h-10 w-auto object-contain mx-auto mb-4" />
+          <img src="/logo.png" alt="XAFEARN" className="h-10 w-auto object-contain mx-auto mb-4" />
           <h1 className="text-2xl font-black text-slate-900 mb-2">Finalise ton profil</h1>
           <p className="text-slate-500 text-sm">Ces informations nous aident à personnaliser ton expérience.</p>
         </div>

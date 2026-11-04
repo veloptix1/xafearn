@@ -5,23 +5,23 @@ import { useRouter } from 'next/navigation'
 const TEMPLATES = [
   {
     name: 'Nouvelle campagne',
-    subject: 'Nouvelle campagne disponible sur XAFERAN',
-    message: "Bonjour,\n\nUne nouvelle campagne est disponible dans votre catalogue. Connectez-vous dès maintenant pour la découvrir et commencer à gagner.\n\nL'équipe XAFERAN"
+    subject: 'Nouvelle campagne disponible sur XAFEARN',
+    message: "Bonjour,\n\nUne nouvelle campagne est disponible dans votre catalogue. Connectez-vous dès maintenant pour la découvrir et commencer à gagner.\n\nL'équipe XAFEARN"
   },
   {
     name: 'Rappel de vérification',
     subject: 'Rappel : Vérifiez votre annonce',
-    message: "Bonjour,\n\nVous avez publié une annonce il y a quelques jours. N'oubliez pas de vérifier votre statut pour valider vos gains.\n\nL'équipe XAFERAN"
+    message: "Bonjour,\n\nVous avez publié une annonce il y a quelques jours. N'oubliez pas de vérifier votre statut pour valider vos gains.\n\nL'équipe XAFEARN"
   },
   {
     name: 'Mise à jour importante',
-    subject: 'Information importante concernant XAFERAN',
-    message: "Bonjour,\n\nNous avons le plaisir de vous annoncer de nouvelles fonctionnalités sur la plateforme. Découvrez-les dès maintenant.\n\nL'équipe XAFERAN"
+    subject: 'Information importante concernant XAFEARN',
+    message: "Bonjour,\n\nNous avons le plaisir de vous annoncer de nouvelles fonctionnalités sur la plateforme. Découvrez-les dès maintenant.\n\nL'équipe XAFEARN"
   },
   {
     name: 'Relance inactifs',
-    subject: 'Vous nous manquez sur XAFERAN',
-    message: "Bonjour,\n\nCela fait un moment que vous ne vous êtes pas connecté. De nouvelles campagnes vous attendent. Revenez vite pour ne pas manquer de gains.\n\nL'équipe XAFERAN"
+    subject: 'Vous nous manquez sur XAFEARN',
+    message: "Bonjour,\n\nCela fait un moment que vous ne vous êtes pas connecté. De nouvelles campagnes vous attendent. Revenez vite pour ne pas manquer de gains.\n\nL'équipe XAFEARN"
   }
 ]
 

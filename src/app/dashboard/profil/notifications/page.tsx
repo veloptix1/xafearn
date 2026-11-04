@@ -61,7 +61,7 @@ export default function NotificationsSettingsPage() {
     { key: 'email_on_validation', title: 'Validation de diffusion', desc: 'Recevoir un email quand vos gains sont validés.' },
     { key: 'email_on_rejection', title: 'Rejet de preuve', desc: 'Recevoir un email si votre preuve est rejetée.' },
     { key: 'email_on_payment', title: 'Paiements & Retraits', desc: 'Recevoir un email à chaque demande de retrait.' },
-    { key: 'email_on_newsletter', title: 'Newsletter XAFERAN', desc: 'Conseils, astuces et actualités de la plateforme.' },
+    { key: 'email_on_newsletter', title: 'Newsletter XAFEARN', desc: 'Conseils, astuces et actualités de la plateforme.' },
   ]
 
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center text-slate-500">Chargement...</div>

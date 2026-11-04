@@ -5,7 +5,7 @@ export default function ConditionsPage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
         <Link href="/" className="flex items-center gap-2">
-          <img src="/logo.png" alt="XAFERAN" className="h-7 w-auto object-contain" />
+          <img src="/logo.png" alt="XAFEARN" className="h-7 w-auto object-contain" />
         </Link>
         <Link href="/signup" className="text-sm font-semibold text-sky-500 hover:text-sky-600">
           Retour
@@ -26,7 +26,7 @@ export default function ConditionsPage() {
               Acceptation des conditions
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              En créant un compte sur <strong>XAFERAN</strong>, vous acceptez sans réserve les présentes conditions d'utilisation. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser la plateforme. XAFERAN se réserve le droit de modifier ces conditions à tout moment, avec notification préalable.
+              En créant un compte sur <strong>XAFEARN</strong>, vous acceptez sans réserve les présentes conditions d'utilisation. Si vous n'acceptez pas ces conditions, veuillez ne pas utiliser la plateforme. XAFEARN se réserve le droit de modifier ces conditions à tout moment, avec notification préalable.
             </p>
           </section>
 
@@ -36,7 +36,7 @@ export default function ConditionsPage() {
               Description du service
             </h2>
             <p className="text-slate-600 leading-relaxed mb-3">
-              XAFERAN est une plateforme de mise en relation entre <strong>annonceurs</strong> et <strong>diffuseurs</strong> :
+              XAFEARN est une plateforme de mise en relation entre <strong>annonceurs</strong> et <strong>diffuseurs</strong> :
             </p>
             <ul className="list-disc list-inside text-slate-600 space-y-2 ml-2">
               <li>Les annonceurs créent des campagnes publicitaires et paient pour un nombre de vues.</li>
@@ -51,7 +51,7 @@ export default function ConditionsPage() {
               Inscription et compte
             </h2>
             <p className="text-slate-600 leading-relaxed mb-3">
-              Pour utiliser XAFERAN, vous devez :
+              Pour utiliser XAFEARN, vous devez :
             </p>
             <ul className="list-disc list-inside text-slate-600 space-y-2 ml-2">
               <li>Être âgé d'au moins 18 ans.</li>
@@ -90,7 +90,7 @@ export default function ConditionsPage() {
             </h2>
             <ul className="list-disc list-inside text-slate-600 space-y-2 ml-2">
               <li>Le gain par vue varie selon le niveau du diffuseur (0,50 F à 1,75 F).</li>
-              <li>Les gains sont validés manuellement par l'équipe XAFERAN sous 24 à 48h.</li>
+              <li>Les gains sont validés manuellement par l'équipe XAFEARN sous 24 à 48h.</li>
               <li>Le retrait minimum est de 1 000 FCFA.</li>
               <li>Les retraits sont effectués via Mobile Money (Orange, MTN) sous 72h.</li>
               <li>Les gains non réclamés pendant 12 mois sont perdus.</li>
@@ -118,7 +118,7 @@ export default function ConditionsPage() {
               Responsabilité
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              XAFERAN agit comme <strong>intermédiaire</strong> entre annonceurs et diffuseurs. Nous ne sommes pas responsables de la qualité des produits ou services proposés par les annonceurs. En cas de litige commercial, celui-ci doit être réglé directement entre les parties concernées.
+              XAFEARN agit comme <strong>intermédiaire</strong> entre annonceurs et diffuseurs. Nous ne sommes pas responsables de la qualité des produits ou services proposés par les annonceurs. En cas de litige commercial, celui-ci doit être réglé directement entre les parties concernées.
             </p>
           </section>
 
@@ -128,7 +128,7 @@ export default function ConditionsPage() {
               Suspension et résiliation
             </h2>
             <p className="text-slate-600 leading-relaxed">
-              XAFERAN se réserve le droit de suspendre ou résilier tout compte en cas de violation des présentes conditions, sans préavis ni remboursement des sommes déjà versées. L'utilisateur peut supprimer son compte à tout moment depuis son profil.
+              XAFEARN se réserve le droit de suspendre ou résilier tout compte en cas de violation des présentes conditions, sans préavis ni remboursement des sommes déjà versées. L'utilisateur peut supprimer son compte à tout moment depuis son profil.
             </p>
           </section>
 

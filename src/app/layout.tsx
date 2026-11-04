@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "XAFERAN — Ton statut, tes gains",
+  title: "XAFEARN — Ton statut, tes gains",
   description: "Réseau social de publicité rémunérée",
 };
 

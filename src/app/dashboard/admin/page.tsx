@@ -279,7 +279,7 @@ export default function AdminPage() {
           <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
           </Link>
-          <img src="/logo.png" alt="XAFERAN" className="h-6 w-auto object-contain" />
+          <img src="/logo.png" alt="XAFEARN" className="h-6 w-auto object-contain" />
         </div>
         <Link href="/dashboard/admin/annonce-test" className="px-3 py-1.5 bg-sky-500 text-white text-xs font-bold rounded-lg hover:bg-sky-400 transition">Annonce test</Link>
       </header>

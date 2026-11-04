@@ -142,7 +142,7 @@ export default function AnnoncesPage() {
           </Link>
           <h1 className="text-lg font-bold text-slate-900">Annonces</h1>
         </div>
-        <img src="/logo.png" alt="XAFERAN" className="h-6 w-auto object-contain" />
+        <img src="/logo.png" alt="XAFEARN" className="h-6 w-auto object-contain" />
       </header>
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2">

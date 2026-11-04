@@ -34,7 +34,7 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
-        <img src="/logo.png" alt="XAFERAN" className="h-7 w-auto object-contain" />
+        <img src="/logo.png" alt="XAFEARN" className="h-7 w-auto object-contain" />
         <div className="flex items-center gap-2">
           <NotificationBell userId={profile.id} />
           <Link href="/dashboard/profil" className="w-9 h-9 bg-slate-100 border border-slate-200 rounded-full flex items-center justify-center text-slate-600 hover:bg-slate-200 transition">
