@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -236,5 +236,88 @@ export function EmailForm({ users }: { users: any[] }) {
         </div>
       </div>
     </form>
+  )
+}
+
+
+export function TaskAdminSection() {
+  const [tasks, setTasks] = useState<any[]>([])
+  const [submissions, setSubmissions] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState<string | null>(null)
+  const supabase = createClient()
+  const router = useRouter()
+
+  useEffect(() => {
+    async function load() {
+      const { data: t } = await supabase.from('tasks').select('*').order('created_at', { ascending: false })
+      const { data: s } = await supabase.from('task_submissions').select('*').eq('status', 'pending')
+      setTasks(t || [])
+      setSubmissions(s || [])
+      setLoading(false)
+    }
+    load()
+  }, [supabase])
+
+  const handleValidate = async (submissionId: string, userId: string, taskId: string, reward: number) => {
+    setLoading(true)
+
+    // 1. Mettre à jour la soumission
+    await supabase.from('task_submissions').update({ status: 'approved' }).eq('id', submissionId)
+
+    // 2. Créditer le solde
+    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
+    if (profile) {
+      await supabase.from('profiles').update({ balance: (profile.balance || 0) + reward }).eq('id', userId)
+    }
+
+    // 3. Notification
+    await supabase.from('notifications').insert({
+      user_id: userId,
+      title: 'Tâche validée ✅',
+      message: `Ta tâche a été validée. Tu as gagné ${reward} FCFA.`,
+      link: '/dashboard/taches'
+    })
+
+    setToast('Tâche validée et solde crédité !')
+    setLoading(false)
+    setTimeout(() => { setToast(null); router.refresh() }, 2000)
+  }
+
+  const handleReject = async (submissionId: string) => {
+    await supabase.from('task_submissions').update({ status: 'rejected' }).eq('id', submissionId)
+    setToast('Tâche rejetée.')
+    router.refresh()
+  }
+
+  if (loading) return <div className="text-center py-4 text-slate-500">Chargement...</div>
+
+  return (
+    <div>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-bold text-slate-900">Tâches à valider ({submissions.length})</h2>
+        <Link href="/dashboard/admin/taches" className="px-4 py-2 bg-sky-500 text-white text-sm font-bold rounded-xl hover:bg-sky-400">Gérer les tâches</Link>
+      </div>
+
+      {submissions.length === 0 ? (
+        <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">Aucune tâche à valider.</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {submissions.map((s: any) => {
+            const task = tasks.find(t => t.id === s.task_id)
+            return (
+              <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                <h3 className="font-bold text-slate-900 text-sm">{task.title}</h3>
+                <p className="text-xs text-slate-500 mb-3">Gain : {task.reward} FCFA</p>
+                <div className="flex gap-2">
+                  <button onClick={() => handleValidate(s.id, s.user_id, s.task_id, task.reward)} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Valider</button>
+                  <button onClick={() => handleReject(s.id)} className="flex-1 py-2 bg-red-50 text-red-600 font-bold text-sm rounded-lg border border-red-200">Rejeter</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
   )
 }
