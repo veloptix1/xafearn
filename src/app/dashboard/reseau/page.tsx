@@ -36,6 +36,7 @@ export default function ReseauPage() {
   const [editText, setEditText] = useState('')
   const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null)
 
   useEffect(() => {
     loadPosts()
@@ -362,6 +363,11 @@ export default function ReseauPage() {
           </div>
         </div>
       )}
+      {/* Fermer le menu si on clique ailleurs */}
+      {openMenuId && (
+        <div className="fixed inset-0 z-10" onClick={() => setOpenMenuId(null)}></div>
+      )}
+
       {/* MODAL DE MODIFICATION */}
       {editingPost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
