@@ -28,7 +28,12 @@ export default function NotificationsPage() {
         <h1 className="text-lg font-bold text-slate-900">Notifications</h1>
       </header>
       <div className="p-4 md:p-8 max-w-2xl mx-auto mt-2">
-        <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center py-20">
+            <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div>
+            <p className="text-slate-500 text-sm mt-4">Chargement...</p>
+          </div>
+        }>
           <NotificationsData />
         </Suspense>
       </div>
