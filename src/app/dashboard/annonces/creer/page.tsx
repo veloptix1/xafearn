@@ -31,6 +31,7 @@ export default function CreerAnnoncePage() {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [views, setViews] = useState('1000')
   const [acceptTerms, setAcceptTerms] = useState(false)
+  const [isFlash, setIsFlash] = useState(false)
 
   // Durée fixée à 7 jours par défaut, non modifiable
   const duration = 7
@@ -80,7 +81,9 @@ export default function CreerAnnoncePage() {
       views_purchased: parseInt(views),
       budget: budget,
       duration_days: duration,
-      status: 'pending'
+      status: 'pending',
+      is_flash: isFlash,
+      expires_at: isFlash ? new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString() : null
     })
 
     if (insertError) {
@@ -200,10 +203,21 @@ export default function CreerAnnoncePage() {
               />
             </div>
             
+            <label className="flex items-start gap-3 cursor-pointer p-3 border border-rose-200 bg-rose-50 rounded-xl mt-4 mb-4">
+              <input type="checkbox" checked={isFlash} onChange={e => setIsFlash(e.target.checked)} className="mt-1 w-4 h-4 accent-rose-500 rounded" />
+              <div>
+                <p className="text-sm font-bold text-rose-700 flex items-center gap-1">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  Mode Flash (Urgence)
+                </p>
+                <p className="text-xs text-rose-600 mt-0.5">L'annonce expirera dans 2 heures. Les diffuseurs gagnent un bonus x2 pour la rapidité.</p>
+              </div>
+            </label>
+
             <div className="bg-sky-50 border border-sky-100 rounded-xl p-4 flex justify-between items-center">
               <div>
                 <p className="text-xs text-sky-700 font-medium uppercase tracking-wider">Budget total estimé</p>
-                <p className="text-xs text-slate-500">1,92 F / vue • Durée fixe : 7 jours</p>
+                <p className="text-xs text-slate-500">1,92 F / vue • Durée fixe : {isFlash ? '2 heures' : '7 jours'}</p>
               </div>
               <p className="text-2xl font-black text-sky-600">{budget.toLocaleString('fr-FR')} F</p>
             </div>
