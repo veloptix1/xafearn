@@ -2,14 +2,15 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
+export const runtime = 'nodejs'
+export const revalidate = 0
+
 export async function POST(req: Request) {
   try {
-    // On initialise Supabase UNIQUEMENT quand la requête arrive
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Variables manquantes au runtime')
       return new NextResponse('Configuration manquante', { status: 500 })
     }
 
@@ -42,16 +43,10 @@ export async function POST(req: Request) {
       return new NextResponse('Missing data', { status: 400 })
     }
 
-    const { data: payment } = await supabase
+    await supabase
       .from('leekpay_payments')
       .update({ status: 'paid', paid_at: new Date().toISOString() })
       .eq('checkout_id', checkoutId)
-      .select()
-      .single()
-
-    if (!payment) {
-      return new NextResponse('Payment not found', { status: 404 })
-    }
 
     const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
     
@@ -70,7 +65,6 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error('Erreur webhook:', error)
     return new NextResponse('Erreur interne', { status: 500 })
   }
 }
