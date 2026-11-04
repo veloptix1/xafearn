@@ -140,6 +140,15 @@ export default function DashboardPage() {
                 <h3 className="font-bold text-fuchsia-900 text-sm">Vidéo Promo</h3>
                 <p className="text-[10px] text-fuchsia-600">Visuels animés</p>
               </Link>
+
+              <Link href="/dashboard/coffres" className="block bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-2xl shadow-sm hover:border-amber-400 transition group relative overflow-hidden">
+                <div className="absolute top-0 right-0 bg-amber-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">NEW</div>
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 group-hover:bg-amber-200 transition mb-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                </div>
+                <h3 className="font-bold text-amber-900 text-sm">Trésors</h3>
+                <p className="text-[10px] text-amber-600">Gagne des coffres</p>
+              </Link>
             </div>
           </div>
         ) : (
