@@ -135,6 +135,18 @@ async function DashboardData() {
             <h3 className="font-bold text-fuchsia-900 text-sm">Vidéo Promo</h3>
             <p className="text-[10px] text-fuchsia-600">Visuels animés</p>
           </Link>
+
+          <Link href="/dashboard/annonceur/analytics" className="block bg-gradient-to-br from-emerald-50 to-white border border-emerald-200 p-4 rounded-2xl shadow-sm hover:border-emerald-400 hover:shadow-md transition group col-span-2">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 group-hover:bg-emerald-200 transition">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+              </div>
+              <div>
+                <h3 className="font-bold text-emerald-900 text-sm">Tableau de bord</h3>
+                <p className="text-[10px] text-emerald-600">Suis tes campagnes en temps réel</p>
+              </div>
+            </div>
+          </Link>
         </div>
       </div>
     </div>
