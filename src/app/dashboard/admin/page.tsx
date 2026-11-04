@@ -59,7 +59,7 @@ async function validateSubmission(formData: FormData) {
     }).eq('id', id)
 
     // 2. Si c'est l'annonce test : on débloque le compte, mais ON NE PAIE PAS
-    if (sub.campaigns?.is_welcome_campaign) {
+    if ((sub.campaigns as any)?.is_welcome_campaign) {
       // Désactiver le mode test
       await supabase.from('profiles').update({ is_test_mode: false }).eq('id', sub.user_id)
       
@@ -83,7 +83,7 @@ async function validateSubmission(formData: FormData) {
       await supabase.from('notifications').insert({
         user_id: sub.user_id,
         title: 'Diffusion validée ✅',
-        message: `Ta diffusion pour "${sub.campaigns?.title}" a été validée. Tu as gagné ${totalGain.toFixed(2)} FCFA.`,
+        message: `Ta diffusion pour "${(sub.campaigns as any)?.title}" a été validée. Tu as gagné ${totalGain.toFixed(2)} FCFA.`,
         link: '/dashboard'
       })
 
@@ -112,7 +112,7 @@ async function rejectSubmission(formData: FormData) {
     await supabase.from('notifications').insert({
       user_id: sub.user_id,
       title: 'Preuve rejetée ❌',
-      message: `Ta preuve pour "${sub.campaigns?.title}" a été rejetée. Vérifie qu'elle est bien conforme.`,
+      message: `Ta preuve pour "${(sub.campaigns as any)?.title}" a été rejetée. Vérifie qu'elle est bien conforme.`,
       link: '/dashboard/annonces'
     })
   }

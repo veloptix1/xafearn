@@ -9,22 +9,26 @@ async function CatalogueContent() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
+  // 1. D'abord, on récupère le profil
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  const isInTestMode = profile?.is_test_mode === true && !submissions?.find(s => s.status === 'validated' && s.campaigns?.is_welcome_campaign)
 
-  // On récupère toutes les campagnes actives
+  // 2. Ensuite, on récupère les campagnes
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
     .eq('status', 'active')
     .order('created_at', { ascending: false })
 
+  // 3. Enfin, on récupère les soumissions
   const { data: submissions } = await supabase
     .from('ad_submissions')
     .select('*')
     .eq('user_id', user.id)
 
-  // On sépare l'annonce test et les annonces payantes
+  // 4. Maintenant on peut calculer si on est en test
+  const hasValidatedTest = submissions?.some(s => s.status === 'validated' && campaigns?.find(c => c.id === s.campaign_id)?.is_welcome_campaign)
+  const isInTestMode = profile?.is_test_mode === true && !hasValidatedTest
+
   const welcomeCampaign = campaigns?.find(c => c.is_welcome_campaign)
   const paidCampaigns = campaigns?.filter(c => !c.is_welcome_campaign) || []
 
@@ -44,7 +48,7 @@ async function CatalogueContent() {
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           </div>
           <div>
-            <h3 className="font-bold text-amber-800 text-sm">Mode Test Actif (2 jours)</h3>
+            <h3 className="font-bold text-amber-800 text-sm">Mode Test Actif</h3>
             <p className="text-amber-700 text-xs mt-1">Publie l'annonce recommandée ci-dessous pour prouver ta fiabilité et débloquer toutes les campagnes payantes.</p>
           </div>
         </div>
@@ -59,22 +63,19 @@ async function CatalogueContent() {
           
           {/* L'annonce de bienvenue */}
           {welcomeCampaign && (
-            <div>
-              <div className="bg-white border-2 border-emerald-400 rounded-2xl shadow-md overflow-hidden flex flex-col hover:shadow-lg transition">
-                {welcomeCampaign.image_url && (
-                  <div className="h-48 w-full bg-slate-100 relative">
-                    <img src={welcomeCampaign.image_url} alt={welcomeCampaign.title} className="w-full h-full object-cover" />
-                    <div className="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-md flex items-center gap-1">
-                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                      Recommandé pour toi
-                    </div>
+            <div className="bg-white border-2 border-emerald-400 rounded-2xl shadow-md overflow-hidden flex flex-col hover:shadow-lg transition">
+              {welcomeCampaign.image_url && (
+                <div className="h-48 w-full bg-slate-100 relative">
+                  <img src={welcomeCampaign.image_url} alt={welcomeCampaign.title} className="w-full h-full object-cover" />
+                  <div className="absolute top-3 left-3 bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-full shadow-md">
+                    Recommandé pour toi
                   </div>
-                )}
-                <div className="p-5">
-                  <h3 className="font-bold text-lg text-slate-900 mb-2">{welcomeCampaign.title}</h3>
-                  <p className="text-sm text-slate-500 mb-4 line-clamp-3">{welcomeCampaign.description}</p>
-                  <DiffusionModal campaign={welcomeCampaign} userId={user.id} submission={submissions?.find(s => s.campaign_id === welcomeCampaign.id)} />
                 </div>
+              )}
+              <div className="p-5">
+                <h3 className="font-bold text-lg text-slate-900 mb-2">{welcomeCampaign.title}</h3>
+                <p className="text-sm text-slate-500 mb-4 line-clamp-3">{welcomeCampaign.description}</p>
+                <DiffusionModal campaign={welcomeCampaign} userId={user.id} submission={submissions?.find(s => s.campaign_id === welcomeCampaign.id)} />
               </div>
             </div>
           )}
@@ -95,6 +96,9 @@ async function CatalogueContent() {
                     {campaign.image_url && (
                       <div className="h-40 w-full bg-slate-100 relative">
                         <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" />
+                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-slate-900 shadow-sm">
+                          {campaign.views_purchased?.toLocaleString('fr-FR')} vues
+                        </div>
                       </div>
                     )}
                     <div className="p-4 flex-1 flex flex-col">
@@ -116,10 +120,7 @@ async function CatalogueContent() {
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
                     </div>
                     <h3 className="font-bold text-slate-900 text-sm mb-1">Campagnes verrouillées</h3>
-                    <p className="text-xs text-slate-500 mb-4">Termine d'abord ta campagne test pour débloquer ces annonces et gagner plus.</p>
-                    <Link href="#welcome" className="block w-full py-2 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition">
-                      Voir l'annonce test
-                    </Link>
+                    <p className="text-xs text-slate-500 mb-4">Termine d'abord ta campagne test pour débloquer ces annonces.</p>
                   </div>
                 </div>
               )}
