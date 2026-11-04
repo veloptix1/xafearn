@@ -31,6 +31,12 @@ export default function ReseauPage() {
   const [newComment, setNewComment] = useState('')
   const [isCommenting, setIsCommenting] = useState(false)
 
+  // Modification / Suppression
+  const [editingPost, setEditingPost] = useState<any>(null)
+  const [editText, setEditText] = useState('')
+  const [deletingPostId, setDeletingPostId] = useState<string | null>(null)
+  const [isUpdating, setIsUpdating] = useState(false)
+
   useEffect(() => {
     loadPosts()
   }, [activeTab])
@@ -167,6 +173,30 @@ export default function ReseauPage() {
       showToast('Erreur: ' + err.message, 'error')
     }
     setIsSending(false)
+  }
+
+  const handleDeletePost = async () => {
+    try {
+      await supabase.from('posts').delete().eq('id', deletingPostId)
+      showToast('Publication supprimée.', 'success')
+      setDeletingPostId(null)
+      loadPosts()
+    } catch (err) {
+      showToast('Erreur lors de la suppression.', 'error')
+    }
+  }
+
+  const handleUpdatePost = async () => {
+    setIsUpdating(true)
+    try {
+      await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
+      showToast('Publication modifiée !', 'success')
+      setEditingPost(null)
+      loadPosts()
+    } catch (err) {
+      showToast('Erreur lors de la modification.', 'error')
+    }
+    setIsUpdating(false)
   }
 
   const openComments = async (post: any) => {
@@ -332,6 +362,39 @@ export default function ReseauPage() {
           </div>
         </div>
       )}
+      {/* MODAL DE MODIFICATION */}
+      {editingPost && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
+            <h2 className="font-bold text-lg mb-4">Modifier la publication</h2>
+            <textarea value={editText} onChange={e => setEditText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-4" rows={4} />
+            <div className="flex gap-2">
+              <button onClick={() => setEditingPost(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+              <button onClick={handleUpdatePost} disabled={isUpdating} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
+                {isUpdating ? 'Enregistrement...' : 'Enregistrer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE SUPPRESSION */}
+      {deletingPostId && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900">
+            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </div>
+            <h3 className="font-bold text-lg mb-2">Supprimer cette publication ?</h3>
+            <p className="text-sm text-slate-500 mb-6">Cette action est irréversible.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeletingPostId(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+              <button onClick={handleDeletePost} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </main>
   )
 }
