@@ -2,8 +2,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import Toast from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
+import Toast from '@/components/Toast'
 
 export default function AdminTreasuresPage() {
   const supabase = createClient()
@@ -12,7 +12,13 @@ export default function AdminTreasuresPage() {
   const [treasures, setTreasures] = useState<any[]>([])
   const [winners, setWinners] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  
+  // Toast
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
+
+  // Confirmation de suppression
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
 
   // Formulaire
   const [sponsorName, setSponsorName] = useState('')
@@ -45,11 +51,9 @@ export default function AdminTreasuresPage() {
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
     
-    // Charger les coffres
     const { data: t } = await supabase.from('treasures').select('*').order('created_at', { ascending: false })
     setTreasures(t || [])
 
-    // Charger les gagnants avec leurs infos
     if (t && t.length > 0) {
       const { data: w } = await supabase
         .from('treasure_winners')
@@ -60,8 +64,6 @@ export default function AdminTreasuresPage() {
     
     setLoading(false)
   }
-
-  const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   const addLink = () => {
     setLinks([...links, { platform: 'youtube', url: '', hint: '' }])
@@ -79,12 +81,11 @@ export default function AdminTreasuresPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (amount < 1000) return showToast('Le montant minimum est de 1000 FCFA.')
-    if (links.length === 0) return showToast('Ajoute au moins un lien.')
+    if (amount < 1000) return showToast('Le montant minimum est de 1000 FCFA.', 'warning')
+    if (links.length === 0) return showToast('Ajoute au moins un lien.', 'warning')
 
     const expiresAt = new Date(Date.now() + tierInfo.time * 60 * 60 * 1000).toISOString()
 
-    // 1. Créer le coffre
     const { data: treasure, error } = await supabase.from('treasures').insert({
       sponsor_name: sponsorName,
       sponsor_logo_url: sponsorLogo,
@@ -97,27 +98,28 @@ export default function AdminTreasuresPage() {
       status: 'active'
     }).select().single()
 
-    if (error) return showToast('Erreur: ' + error.message)
+    if (error) return showToast('Erreur: ' + error.message, 'error')
 
-    // 2. Ajouter les liens
     const linksToInsert = links.map(l => ({ treasure_id: treasure.id, platform: l.platform, url: l.url, hint: l.hint }))
     await supabase.from('treasure_links').insert(linksToInsert)
 
-    showToast('Coffre-fort créé avec succès !')
+    showToast('Coffre-fort créé avec succès !', 'success')
     setIsModalOpen(false)
     setSponsorName(''); setSponsorLogo(''); setTotalAmount(''); setSecretCode(''); setLinks([])
     loadData()
   }
 
-  const deleteTreasure = async (id: string) => {
-    if (!confirm('Supprimer ce coffre ? Cette action est irréversible.')) return
-    await supabase.from('treasures').delete().eq('id', id)
+  const deleteTreasure = async () => {
+    if (!deleteConfirm) return
+    await supabase.from('treasures').delete().eq('id', deleteConfirm)
+    setDeleteConfirm(null)
+    showToast('Coffre supprimé avec succès.', 'success')
     loadData()
   }
 
   const closeTreasure = async (id: string) => {
-    if (!confirm('Clôturer ce coffre ? Les utilisateurs ne pourront plus participer.')) return
     await supabase.from('treasures').update({ status: 'completed' }).eq('id', id)
+    showToast('Coffre clôturé avec succès.', 'success')
     loadData()
   }
 
@@ -125,6 +127,8 @@ export default function AdminTreasuresPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
+      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/admin" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
@@ -136,8 +140,6 @@ export default function AdminTreasuresPage() {
       </header>
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-4">
-        {toast && <Toast message={toast} type={toast.includes('succès') || toast.includes('créé') ? 'success' : 'error'} onClose={() => setToast(null)} />}
-        
         {treasures.length === 0 ? (
           <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500">
             Aucun coffre créé pour le moment.
@@ -171,7 +173,6 @@ export default function AdminTreasuresPage() {
                   </div>
                 </div>
 
-                {/* Liste des gagnants */}
                 <div>
                   <p className="text-xs font-bold text-slate-500 uppercase mb-2">Gagnants ({treasureWinners.length})</p>
                   {treasureWinners.length === 0 ? (
@@ -230,7 +231,6 @@ export default function AdminTreasuresPage() {
                 <input type="number" required min="1000" placeholder="Ex: 5000" value={totalAmount} onChange={e => setTotalAmount(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold" />
               </div>
 
-              {/* Aperçu des paliers */}
               {amount >= 1000 && (
                 <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl text-sm">
                   <p className="font-bold text-amber-800 mb-2">Palier : {tierInfo.name.toUpperCase()} ({tierInfo.time}h)</p>
