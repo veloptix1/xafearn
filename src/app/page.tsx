@@ -113,7 +113,7 @@ export default function Home() {
                   <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg">Paiements rapides et sécurisés</h3>
+                  <h4 className="font-bold text-lg">Paiements rapides et sécurisés</h4>
                   <p className="text-slate-400 text-sm mt-1">Retire tes gains directement sur Orange Money, MTN MoMo, Wave ou Moov.</p>
                 </div>
               </div>
@@ -122,7 +122,7 @@ export default function Home() {
                   <svg className="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg">Gagne de plus en plus</h3>
+                  <h4 className="font-bold text-lg">Gagne de plus en plus</h4>
                   <p className="text-slate-400 text-sm mt-1">Passe de 0,50 F à 1,75 F par vue en montant de niveau.</p>
                 </div>
               </div>
@@ -131,7 +131,7 @@ export default function Home() {
                   <svg className="w-5 h-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" /></svg>
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg">Crée ton équipe</h3>
+                  <h4 className="font-bold text-lg">Crée ton équipe</h4>
                   <p className="text-slate-400 text-sm mt-1">Deviens Expert, recrute des agents et touche des commissions sur leurs gains.</p>
                 </div>
               </div>
