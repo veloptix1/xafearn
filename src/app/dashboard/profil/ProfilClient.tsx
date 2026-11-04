@@ -75,7 +75,8 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
         </div>
       </div>
 
-      {/* Sélecteur de Mode */}
+      {/* Sélecteur de Mode (caché pour les admins) */}
+      {profile?.role !== 'admin' && (
       <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mb-6">
         <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Mode d'utilisation</p>
         <div className="flex bg-slate-100 p-1 rounded-xl">
