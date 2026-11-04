@@ -1,91 +1,158 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 const TEMPLATES = [
-  {
-    name: 'Nouvelle campagne',
-    subject: 'Nouvelle campagne disponible sur XAFEARN',
-    message: "Bonjour,\n\nUne nouvelle campagne est disponible dans votre catalogue. Connectez-vous dès maintenant pour la découvrir et commencer à gagner.\n\nL'équipe XAFEARN"
-  },
-  {
-    name: 'Rappel de vérification',
-    subject: 'Rappel : Vérifiez votre annonce',
-    message: "Bonjour,\n\nVous avez publié une annonce il y a quelques jours. N'oubliez pas de vérifier votre statut pour valider vos gains.\n\nL'équipe XAFEARN"
-  },
-  {
-    name: 'Mise à jour importante',
-    subject: 'Information importante concernant XAFEARN',
-    message: "Bonjour,\n\nNous avons le plaisir de vous annoncer de nouvelles fonctionnalités sur la plateforme. Découvrez-les dès maintenant.\n\nL'équipe XAFEARN"
-  },
-  {
-    name: 'Relance inactifs',
-    subject: 'Vous nous manquez sur XAFEARN',
-    message: "Bonjour,\n\nCela fait un moment que vous ne vous êtes pas connecté. De nouvelles campagnes vous attendent. Revenez vite pour ne pas manquer de gains.\n\nL'équipe XAFEARN"
-  }
+  { name: 'Nouvelle campagne', subject: 'Nouvelle campagne disponible sur XAFEARN', message: "Bonjour,\n\nUne nouvelle campagne est disponible. Connectez-vous dès maintenant.\n\nL'équipe XAFEARN" },
+  { name: 'Rappel', subject: 'Rappel : Vérifiez votre annonce', message: "Bonjour,\n\nN'oubliez pas de vérifier votre statut pour valider vos gains.\n\nL'équipe XAFEARN" },
+  { name: 'Info importante', subject: 'Information importante concernant XAFEARN', message: "Bonjour,\n\nNous avons de nouvelles fonctionnalités sur la plateforme.\n\nL'équipe XAFEARN" },
+  { name: 'Relance', subject: 'Vous nous manquez sur XAFEARN', message: "Bonjour,\n\nCela fait un moment que vous ne vous êtes pas connecté.\n\nL'équipe XAFEARN" }
 ]
 
-export function SendSingleEmail({ email, name }: { email: string, name: string }) {
+export function AdminUserRow({ user }: { user: any }) {
   const [isOpen, setIsOpen] = useState(false)
-  const [subject, setSubject] = useState('')
-  const [message, setMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailMessage, setEmailMessage] = useState('')
+  const [newBalance, setNewBalance] = useState(user.balance || 0)
+  
+  const supabase = createClient()
   const router = useRouter()
 
-  const handleTemplate = (tpl: any) => {
-    setSubject(tpl.subject)
-    setMessage(tpl.message)
+  const handleUpdateBalance = async () => {
+    setLoading(true)
+    await supabase.from('profiles').update({ balance: parseFloat(newBalance) }).eq('id', user.id)
+    setToast('Solde mis à jour !')
+    setLoading(false)
+    setTimeout(() => { setToast(null); router.refresh() }, 1500)
   }
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleBlock = async () => {
     setLoading(true)
-    try {
-      const res = await fetch('/api/admin/send-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ emails: [email], subject, message })
-      })
-      const data = await res.json()
-      if (res.ok) {
-        setToast('Email envoyé !')
-        setTimeout(() => { setIsOpen(false); setToast(null); router.refresh() }, 1500)
-      } else {
-        setToast('Erreur: ' + data.error)
-      }
-    } catch (err) {
-      setToast('Erreur réseau')
+    await supabase.from('profiles').update({ is_blocked: !user.is_blocked }).eq('id', user.id)
+    setToast(user.is_blocked ? 'Utilisateur débloqué' : 'Utilisateur bloqué')
+    setLoading(false)
+    setTimeout(() => { setToast(null); router.refresh() }, 1500)
+  }
+
+  const handleDelete = async () => {
+    if (!confirm(`Supprimer définitivement ${user.full_name} ?`)) return
+    setLoading(true)
+    await supabase.from('profiles').delete().eq('id', user.id)
+    setToast('Utilisateur supprimé')
+    setLoading(false)
+    setTimeout(() => { setIsOpen(false); router.refresh() }, 1500)
+  }
+
+  const handleSendEmail = async () => {
+    setLoading(true)
+    const res = await fetch('/api/admin/send-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ emails: [user.email], subject: emailSubject, message: emailMessage })
+    })
+    if (res.ok) {
+      setToast('Email envoyé !')
+      setEmailSubject('')
+      setEmailMessage('')
+    } else {
+      setToast('Erreur envoi email')
     }
     setLoading(false)
+    setTimeout(() => setToast(null), 3000)
   }
 
   return (
     <>
-      <button onClick={() => setIsOpen(true)} className="px-2 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded hover:bg-sky-200">Email</button>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden p-6">
-            <h3 className="font-bold text-lg mb-1">Envoyer un email</h3>
-            <p className="text-xs text-slate-500 mb-4">À : {name} ({email})</p>
-            
-            <div className="flex flex-wrap gap-1 mb-3">
-              {TEMPLATES.map(t => (
-                <button key={t.name} onClick={() => handleTemplate(t)} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200">{t.name}</button>
-              ))}
-            </div>
+      <tr className="hover:bg-slate-50 cursor-pointer" onClick={() => setIsOpen(true)}>
+        <td className="px-4 py-3">
+          <div className="font-bold text-slate-900">{user.full_name}</div>
+          <div className="text-xs text-slate-500">{user.email}</div>
+        </td>
+        <td className="px-4 py-3 capitalize">{user.role} {user.is_admin && <span className="bg-amber-100 text-amber-700 text-[10px] px-1 rounded ml-1">ADMIN</span>}</td>
+        <td className="px-4 py-3">
+          {user.is_blocked ? (
+            <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-1 rounded">Bloqué</span>
+          ) : (
+            <span className="bg-emerald-100 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">Actif</span>
+          )}
+        </td>
+        <td className="px-4 py-3 font-bold text-emerald-600">{user.balance} F</td>
+        <td className="px-4 py-3 text-right">
+          <button className="px-3 py-1 bg-sky-100 text-sky-700 text-xs font-bold rounded">Gérer</button>
+        </td>
+      </tr>
 
-            <form onSubmit={handleSend} className="space-y-3">
-              <input type="text" required placeholder="Sujet de l'email" value={subject} onChange={e => setSubject(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-lg text-sm" />
-              <textarea required rows={5} placeholder="Votre message..." value={message} onChange={e => setMessage(e.target.value)} className="w-full p-2.5 border border-slate-200 rounded-lg text-sm resize-none" />
-              {toast && <div className={`text-sm font-medium ${toast.includes('Erreur') ? 'text-red-500' : 'text-emerald-500'}`}>{toast}</div>}
-              <div className="flex gap-2">
-                <button type="button" onClick={() => setIsOpen(false)} className="flex-1 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg text-sm">Annuler</button>
-                <button type="submit" disabled={loading} className="flex-1 py-2 bg-sky-500 text-white font-bold rounded-lg text-sm disabled:opacity-50">{loading ? 'Envoi...' : 'Envoyer'}</button>
+      {isOpen && (
+        <tr>
+          <td colSpan={5} className="p-0">
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" onClick={() => setIsOpen(false)}>
+              <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 sticky top-0 z-10">
+                  <h3 className="font-bold text-lg">Gérer l'utilisateur</h3>
+                  <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-900 bg-white rounded-full p-1 shadow-sm">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+
+                <div className="p-5 space-y-5">
+                  {toast && <div className="bg-emerald-50 text-emerald-700 p-3 rounded-xl text-sm font-bold text-center">{toast}</div>}
+                  
+                  {/* Infos */}
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-lg font-black text-slate-700 border border-slate-200">
+                        {user.full_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <p className="font-bold text-slate-900">{user.full_name}</p>
+                        <p className="text-xs text-slate-500">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-xs mt-3">
+                      <div className="bg-white p-2 rounded border border-slate-100"><span className="text-slate-500">Rôle:</span> <strong>{user.role}</strong></div>
+                      <div className="bg-white p-2 rounded border border-slate-100"><span className="text-slate-500">Niveau:</span> <strong>{user.level}</strong></div>
+                      <div className="bg-white p-2 rounded border border-slate-100"><span className="text-slate-500">Pays:</span> <strong>{user.country || '-'}</strong></div>
+                      <div className="bg-white p-2 rounded border border-slate-100"><span className="text-slate-500">Ville:</span> <strong>{user.city || '-'}</strong></div>
+                    </div>
+                  </div>
+
+                  {/* Modifier le solde */}
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-2">Modifier le solde</p>
+                    <div className="flex gap-2">
+                      <input type="number" value={newBalance} onChange={e => setNewBalance(e.target.value)} className="flex-1 p-2 border border-slate-200 rounded-lg text-sm" />
+                      <button onClick={handleUpdateBalance} disabled={loading} className="px-4 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Enregistrer</button>
+                    </div>
+                  </div>
+
+                  {/* Email individuel */}
+                  <div>
+                    <p className="text-xs font-bold text-slate-500 uppercase mb-2">Envoyer un email</p>
+                    <div className="flex flex-wrap gap-1 mb-2">
+                      {TEMPLATES.map(t => (
+                        <button key={t.name} onClick={() => { setEmailSubject(t.subject); setEmailMessage(t.message) }} className="text-[10px] bg-slate-100 px-2 py-1 rounded">{t.name}</button>
+                      ))}
+                    </div>
+                    <input type="text" placeholder="Sujet" value={emailSubject} onChange={e => setEmailSubject(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm mb-2" />
+                    <textarea placeholder="Message..." rows={3} value={emailMessage} onChange={e => setEmailMessage(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm mb-2" />
+                    <button onClick={handleSendEmail} disabled={loading || !emailSubject} className="w-full py-2 bg-sky-500 text-white font-bold text-sm rounded-lg disabled:opacity-50">Envoyer l'email</button>
+                  </div>
+
+                  {/* Actions critiques */}
+                  <div className="flex gap-2 pt-4 border-t border-slate-100">
+                    <button onClick={handleBlock} disabled={loading} className={`flex-1 py-2 font-bold text-sm rounded-lg ${user.is_blocked ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                      {user.is_blocked ? 'Débloquer' : 'Bloquer'}
+                    </button>
+                    <button onClick={handleDelete} disabled={loading} className="flex-1 py-2 bg-red-50 text-red-600 font-bold text-sm rounded-lg">Supprimer</button>
+                  </div>
+                </div>
               </div>
-            </form>
-          </div>
-        </div>
+            </div>
+          </td>
+        </tr>
       )}
     </>
   )
@@ -111,11 +178,6 @@ export function EmailForm({ users }: { users: any[] }) {
     else setSelected(filtered.map(u => u.email))
   }
 
-  const handleTemplate = (tpl: any) => {
-    setSubject(tpl.subject)
-    setMessage(tpl.message)
-  }
-
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (selected.length === 0) return setToast('Sélectionnez au moins un utilisateur.')
@@ -128,17 +190,11 @@ export function EmailForm({ users }: { users: any[] }) {
       })
       const data = await res.json()
       if (res.ok) {
-        setToast(`${data.count} email(s) envoyé(s) avec succès !`)
-        setSelected([])
-        setSubject('')
-        setMessage('')
+        setToast(`${data.count} email(s) envoyé(s) !`)
+        setSelected([]); setSubject(''); setMessage('');
         router.refresh()
-      } else {
-        setToast('Erreur: ' + data.error)
-      }
-    } catch (err) {
-      setToast('Erreur réseau')
-    }
+      } else { setToast('Erreur: ' + data.error) }
+    } catch (err) { setToast('Erreur réseau') }
     setLoading(false)
     setTimeout(() => setToast(null), 4000)
   }
@@ -146,10 +202,9 @@ export function EmailForm({ users }: { users: any[] }) {
   return (
     <form onSubmit={handleSend} className="bg-white rounded-2xl p-4 text-slate-900 shadow-md">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        
         <div className="border border-slate-200 rounded-xl overflow-hidden flex flex-col h-72">
           <div className="p-2 border-b border-slate-100 bg-slate-50 flex items-center gap-2">
-            <input type="text" placeholder="Rechercher un utilisateur..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 p-1.5 text-xs border border-slate-200 rounded" />
+            <input type="text" placeholder="Rechercher..." value={search} onChange={e => setSearch(e.target.value)} className="flex-1 p-1.5 text-xs border border-slate-200 rounded" />
             <button type="button" onClick={toggleAll} className="px-2 py-1.5 bg-slate-200 text-slate-700 text-[10px] font-bold rounded">Tout</button>
           </div>
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
@@ -163,25 +218,20 @@ export function EmailForm({ users }: { users: any[] }) {
               </label>
             ))}
           </div>
-          <div className="p-2 border-t border-slate-100 bg-slate-50 text-[10px] font-bold text-sky-600 text-center">
-            {selected.length} sélectionné(s)
-          </div>
+          <div className="p-2 border-t border-slate-100 bg-slate-50 text-[10px] font-bold text-sky-600 text-center">{selected.length} sélectionné(s)</div>
         </div>
 
         <div className="space-y-2">
-          <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Modèles rapides :</p>
-            <div className="flex flex-wrap gap-1">
-              {TEMPLATES.map(t => (
-                <button key={t.name} type="button" onClick={() => handleTemplate(t)} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded hover:bg-slate-200">{t.name}</button>
-              ))}
-            </div>
+          <div className="flex flex-wrap gap-1">
+            {TEMPLATES.map(t => (
+              <button key={t.name} type="button" onClick={() => { setSubject(t.subject); setMessage(t.message) }} className="text-[10px] bg-slate-100 text-slate-600 px-2 py-1 rounded">{t.name}</button>
+            ))}
           </div>
-          <input type="text" required placeholder="Sujet de l'email" value={subject} onChange={e => setSubject(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
-          <textarea required rows={5} placeholder="Écrivez votre message ici..." value={message} onChange={e => setMessage(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none" />
+          <input type="text" required placeholder="Sujet" value={subject} onChange={e => setSubject(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+          <textarea required rows={5} placeholder="Message..." value={message} onChange={e => setMessage(e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm resize-none" />
           {toast && <div className={`text-xs font-medium ${toast.includes('Erreur') ? 'text-red-500' : 'text-emerald-500'}`}>{toast}</div>}
           <button type="submit" disabled={loading || selected.length === 0} className="w-full py-2 bg-sky-500 text-white font-bold rounded-lg text-sm disabled:opacity-50">
-            {loading ? 'Envoi en cours...' : `Envoyer à ${selected.length} personne(s)`}
+            {loading ? 'Envoi...' : `Envoyer à ${selected.length} personne(s)`}
           </button>
         </div>
       </div>
