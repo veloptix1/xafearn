@@ -54,7 +54,6 @@ export default function ReseauPage() {
     const { data: p } = await query
     
     if (p && p.length > 0) {
-      // On récupère le nombre de commentaires pour chaque post
       const postsWithCounts = await Promise.all(p.map(async (post) => {
         const { count } = await supabase
           .from('post_comments')
@@ -135,19 +134,16 @@ export default function ReseauPage() {
     
     setIsSending(true)
     try {
-      await supabase.from('coin_transactions').insert({
-        sender_id: profile.id, receiver_id: activePost.user_id, post_id: activePost.id,
-        coins_amount: coinAmount, fcfc_value: coinAmount
+      const { error: rpcError } = await supabase.rpc('send_coins', {
+        p_sender_id: profile.id,
+        p_receiver_id: activePost.user_id,
+        p_post_id: activePost.id,
+        p_amount: coinAmount
       })
-      await supabase.from('profiles').update({ coins_balance: profile.coins_balance - coinAmount }).eq('id', profile.id)
+
+      if (rpcError) throw rpcError
+
       setProfile({ ...profile, coins_balance: profile.coins_balance - coinAmount })
-      const { error: updateError } = await supabase.from('posts').update({ 
-        total_coins_received: (activePost.total_coins_received || 0) + coinAmount 
-      }).eq('id', activePost.id)
-      
-      if (updateError) {
-        console.error('Erreur mise à jour jetons:', updateError)
-      }
       
       await supabase.from('notifications').insert({
         user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
@@ -156,10 +152,9 @@ export default function ReseauPage() {
       
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
-      // On attend un peu avant de recharger pour laisser la BDD se mettre à jour
-      setTimeout(() => loadPosts(), 500)
-    } catch (err) {
-      showToast('Erreur lors de l\'envoi.', 'error')
+      loadPosts() // Recharger immédiatement
+    } catch (err: any) {
+      showToast('Erreur: ' + (err.message || 'Erreur inconnue'), 'error')
     }
     setIsSending(false)
   }
@@ -191,7 +186,7 @@ export default function ReseauPage() {
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
-      loadPosts() // Recharger pour mettre à jour le compteur
+      loadPosts()
     } catch (err) {
       showToast('Erreur lors du commentaire.', 'error')
     }
@@ -209,7 +204,6 @@ export default function ReseauPage() {
     <main className="min-h-screen bg-black text-white relative">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* HEADER */}
       <header className="fixed top-0 inset-x-0 z-50 px-4 py-3 bg-black/80 backdrop-blur-md border-b border-white/10 flex justify-between items-center">
         <Link href="/dashboard" className="text-white bg-white/10 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -226,7 +220,6 @@ export default function ReseauPage() {
         </Link>
       </header>
 
-      {/* FEED */}
       <div className="pt-16 pb-20">
         {posts.length === 0 ? (
           <div className="h-[80vh] flex flex-col items-center justify-center text-center p-6">
@@ -238,7 +231,6 @@ export default function ReseauPage() {
             <div key={post.id} className="mb-6 px-4">
               <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
                 
-                {/* En-tête du post */}
                 <div className="flex items-center gap-3 p-3">
                   <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
                     {post.profiles?.full_name?.charAt(0)}
@@ -249,14 +241,12 @@ export default function ReseauPage() {
                   </div>
                 </div>
 
-                {/* Image */}
                 {post.content_type === 'image' && post.image_url && (
                   <div className="w-full bg-black flex justify-center">
                     <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain" alt="Post" />
                   </div>
                 )}
 
-                {/* Texte et actions */}
                 <div className="p-4">
                   <p className="text-sm text-slate-200 mb-4 whitespace-pre-wrap">{post.text_content}</p>
                   
@@ -268,7 +258,7 @@ export default function ReseauPage() {
                     
                     <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500/20 transition border border-amber-500/20">
                       <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
-                      <span>🪙 {post.total_coins_received ?? 0}</span>
+                      <span>🪙 {post.total_coins_received || 0}</span>
                     </button>
                   </div>
                 </div>
@@ -278,12 +268,10 @@ export default function ReseauPage() {
         )}
       </div>
 
-      {/* BOUTON PUBLIER */}
       <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50 hover:scale-110 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* MODAL DE CRÉATION */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900">
@@ -305,7 +293,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* MODAL DE JETONS */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900">
@@ -328,7 +315,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* PANNEAU DE COMMENTAIRES */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
           <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col" onClick={e => e.stopPropagation()}>
