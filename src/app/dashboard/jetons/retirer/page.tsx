@@ -15,7 +15,7 @@ export default function WithdrawCoinsPage() {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
 
-  const COMMISSION_RATE = 0.40 // 40% pour la plateforme
+  const COMMISSION_RATE = 0.40
   const coinsToWithdraw = profile?.coins_balance || 0
   const fcfcToReceive = coinsToWithdraw * (1 - COMMISSION_RATE)
 
@@ -35,7 +35,7 @@ export default function WithdrawCoinsPage() {
     
     setIsProcessing(true)
     try {
-      // 1. Ajouter l'argent au solde FCFA (60% de la valeur)
+      // 1. Ajouter l'argent au solde FCFA
       await supabase.from('profiles').update({ balance: (profile.balance || 0) + fcfcToReceive }).eq('id', profile.id)
       
       // 2. Remettre les jetons à zéro

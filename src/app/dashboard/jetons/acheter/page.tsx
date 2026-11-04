@@ -5,12 +5,15 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Toast from '@/components/Toast'
 
+// Taux de conversion : 1000 FCFA = 800 jetons (Marge plateforme : 20%)
+const COINS_PER_1000_FCFA = 800
+
 export default function BuyCoinsPage() {
   const supabase = createClient()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
-  const [selectedPack, setSelectedPack] = useState(1000)
+  const [selectedFCFA, setSelectedFCFA] = useState(1000)
   const [isProcessing, setIsProcessing] = useState(false)
   
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
@@ -27,20 +30,31 @@ export default function BuyCoinsPage() {
     load()
   }, [router, supabase])
 
+  // Calcul du nombre de jetons reçus selon le montant payé
+  const coinsToReceive = Math.floor((selectedFCFA / 1000) * COINS_PER_1000_FCFA)
+
   const handleBuy = async () => {
-    if ((profile.balance || 0) < selectedPack) {
+    if ((profile.balance || 0) < selectedFCFA) {
       return showToast('Solde FCFA insuffisant. Recharge ton compte d\'abord.', 'error')
     }
 
     setIsProcessing(true)
     try {
       // 1. Déduire le solde FCFA
-      await supabase.from('profiles').update({ balance: profile.balance - selectedPack }).eq('id', profile.id)
+      await supabase.from('profiles').update({ balance: profile.balance - selectedFCFA }).eq('id', profile.id)
       
-      // 2. Ajouter les jetons (1 jeton = 1 FCFA)
-      await supabase.from('profiles').update({ coins_balance: (profile.coins_balance || 0) + selectedPack }).eq('id', profile.id)
+      // 2. Ajouter les jetons
+      await supabase.from('profiles').update({ coins_balance: (profile.coins_balance || 0) + coinsToReceive }).eq('id', profile.id)
 
-      showToast(`Tu as acheté ${selectedPack} jetons !`, 'success')
+      // 3. Notification
+      await supabase.from('notifications').insert({
+        user_id: profile.id,
+        title: 'Achat de jetons réussi 🪙',
+        message: `Tu as acheté ${coinsToReceive} jetons pour ${selectedFCFA.toLocaleString('fr-FR')} FCFA.`,
+        link: '/dashboard/reseau'
+      })
+
+      showToast(`Tu as acheté ${coinsToReceive} jetons !`, 'success')
       setTimeout(() => router.push('/dashboard/reseau'), 2000)
     } catch (err) {
       showToast('Erreur lors de l\'achat.', 'error')
@@ -72,28 +86,35 @@ export default function BuyCoinsPage() {
           <p className="text-amber-100 text-sm">Achète des jetons et envoie-les aux publications que tu aimes.</p>
         </div>
 
+        {/* Packs d'achat */}
         <div className="space-y-3 mb-6">
-          {[500, 1000, 2500, 5000].map(amount => (
-            <button 
-              key={amount} 
-              onClick={() => setSelectedPack(amount)}
-              className={`w-full p-4 rounded-2xl border-2 transition flex justify-between items-center ${selectedPack === amount ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white'}`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold text-lg">🪙</div>
-                <span className="font-bold text-slate-900">{amount} Jetons</span>
-              </div>
-              <span className="font-black text-slate-700">{amount.toLocaleString('fr-FR')} F</span>
-            </button>
-          ))}
+          {[1000, 2500, 5000, 10000].map(amount => {
+            const coins = Math.floor((amount / 1000) * COINS_PER_1000_FCFA)
+            return (
+              <button 
+                key={amount} 
+                onClick={() => setSelectedFCFA(amount)}
+                className={`w-full p-4 rounded-2xl border-2 transition flex justify-between items-center ${selectedFCFA === amount ? 'border-amber-500 bg-amber-50' : 'border-slate-200 bg-white'}`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center font-bold text-lg">🪙</div>
+                  <div className="text-left">
+                    <span className="font-bold text-slate-900 block">{coins} Jetons</span>
+                    <span className="text-xs text-slate-500">pour {amount.toLocaleString('fr-FR')} FCFA</span>
+                  </div>
+                </div>
+                <span className="font-black text-slate-700">{amount.toLocaleString('fr-FR')} F</span>
+              </button>
+            )
+          })}
         </div>
 
         <button 
           onClick={handleBuy} 
-          disabled={isProcessing || (profile?.balance || 0) < selectedPack} 
+          disabled={isProcessing || (profile?.balance || 0) < selectedFCFA} 
           className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50 transition shadow-md"
         >
-          {isProcessing ? 'Achat en cours...' : `Acheter ${selectedPack} jetons`}
+          {isProcessing ? 'Achat en cours...' : `Payer ${selectedFCFA.toLocaleString('fr-FR')} F pour ${coinsToReceive} jetons`}
         </button>
       </div>
     </main>

@@ -150,8 +150,8 @@ export default function ReseauPage() {
       await supabase.from('notifications').insert({
         user_id: activePost.user_id,
         title: 'Jetons reçus ! 🪙',
-        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`,
-        link: '/dashboard/reseau'
+        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}. Tu peux les convertir en argent réel depuis ton tableau de bord.`,
+        link: '/dashboard/jetons/retirer'
       })
 
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
