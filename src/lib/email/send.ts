@@ -1,6 +1,5 @@
 import nodemailer from 'nodemailer';
 
-// Configuration stricte pour Vercel (Port 465 + SSL)
 const transporter = nodemailer.createTransport({
   host: 'smtp.gmail.com',
   port: 465,
@@ -9,75 +8,74 @@ const transporter = nodemailer.createTransport({
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
-  connectionTimeout: 10000, // 10 secondes max
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://xafearn-weld.vercel.app';
+// En-têtes anti-spam communs
+const getAntiSpamHeaders = () => ({
+  'Reply-To': process.env.GMAIL_USER,
+  'List-Unsubscribe': `<mailto:${process.env.GMAIL_USER}?subject=unsubscribe>`,
+  'X-Mailer': 'XAFERAN Mailer',
+  'X-Priority': '3', // Priorité normale (pas urgent)
+});
 
 export async function sendWelcomeEmail(email: string, name: string) {
+  const subject = 'Bienvenue sur XAFERAN';
+  const text = `Bonjour ${name},\n\nNous sommes ravis de t'accueillir sur XAFERAN.\n\nGagne de l'argent à chaque vue sur tes statuts WhatsApp. Accède à ton tableau de bord : https://xafearn-weld.vercel.app/dashboard\n\nL'équipe XAFERAN`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2>Bienvenue ${name} !</h2>
+      <p>Nous sommes ravis de t'accueillir sur <strong>XAFERAN</strong>.</p>
+      <p>Gagne de l'argent à chaque vue sur tes statuts WhatsApp.</p>
+      <p><a href="https://xafearn-weld.vercel.app/dashboard" style="color: #0ea5e9;">Accéder à mon tableau de bord</a></p>
+      <p style="font-size: 12px; color: #777; margin-top: 30px;">L'équipe XAFERAN</p>
+    </div>
+  `;
+
   try {
-    const info = await transporter.sendMail({
+    await transporter.sendMail({
       from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
       to: email,
-      subject: 'Bienvenue sur XAFERAN ! 🚀',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #0f172a;">
-          <div style="text-align: center; margin-bottom: 30px;">
-            <img src="${APP_URL}/logo.png" alt="XAFERAN" style="height: 40px;" />
-          </div>
-          <h1 style="color: #0ea5e9;">Bienvenue ${name} !</h1>
-          <p>Nous sommes ravis de t'accueillir sur <strong>XAFERAN</strong>, le réseau social qui transforme tes statuts WhatsApp en source de revenus.</p>
-          <ul style="line-height: 1.8;">
-            <li>💰 Gagne de l'argent à chaque vue sur tes statuts.</li>
-            <li>🚀 Progresse et débloque des campagnes mieux rémunérées.</li>
-            <li>👥 Crée ton équipe et deviens Expert.</li>
-          </ul>
-          <div style="text-align: center; margin: 40px 0;">
-            <a href="${APP_URL}/dashboard" style="background-color: #0ea5e9; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Accéder à mon tableau de bord
-            </a>
-          </div>
-          <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 40px;">
-            L'équipe XAFERAN
-          </p>
-        </div>
-      `,
+      subject,
+      text,
+      html,
+      headers: getAntiSpamHeaders(),
     });
-    console.log('Email de bienvenue envoyé:', info.messageId);
     return { success: true };
-  } catch (err) {
-    console.error('ERREUR ENVOI EMAIL BIENVENUE:', err);
-    return { success: false, error: err };
+  } catch (error: any) {
+    console.error('Erreur email bienvenue:', error.message);
+    return { success: false, error: error.message };
   }
 }
 
-export async function sendValidationEmail(email: string, name: string, views: number, gain: number) {
-  try {
-    const info = await transporter.sendMail({
-      from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: '✅ Ta diffusion a été validée et payée !',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #0f172a;">
-          <h1 style="color: #10b981;">Félicitations ${name} !</h1>
-          <p>Ta preuve de diffusion a été vérifiée et validée par notre équipe.</p>
-          <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0;">
-            <p style="margin: 0 0 10px 0;"><strong>Vues vérifiées :</strong> ${views}</p>
-            <p style="margin: 0;"><strong>Gains crédités :</strong> ${gain.toFixed(2)} FCFA</p>
-          </div>
-          <p>Ces gains ont été ajoutés à ton solde XAFERAN. Tu peux les retirer dès maintenant.</p>
-          <div style="text-align: center; margin: 40px 0;">
-            <a href="${APP_URL}/dashboard" style="background-color: #0ea5e9; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Voir mon solde
-            </a>
-          </div>
-        </div>
-      `,
-    });
-    console.log('Email de validation envoyé:', info.messageId);
-    return { success: true };
-  } catch (err) {
-    console.error('ERREUR ENVOI EMAIL VALIDATION:', err);
-    return { success: false, error: err };
+export async function sendBulkEmail(emails: string[], subject: string, message: string) {
+  let successCount = 0;
+  const text = `${message}\n\n---\nXAFERAN - https://xafearn-weld.vercel.app`;
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <p style="white-space: pre-wrap; line-height: 1.6;">${message}</p>
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+      <p style="font-size: 12px; color: #777;">XAFERAN - <a href="https://xafearn-weld.vercel.app" style="color: #0ea5e9;">xafearn-weld.vercel.app</a></p>
+    </div>
+  `;
+
+  for (const email of emails) {
+    try {
+      await transporter.sendMail({
+        from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
+        to: email,
+        subject,
+        text,
+        html,
+        headers: getAntiSpamHeaders(),
+      });
+      successCount++;
+      // Pause de 200ms pour ne pas déclencher le filtre anti-spam de Gmail
+      await new Promise(r => setTimeout(r, 200));
+    } catch (error: any) {
+      console.error(`Erreur pour ${email}:`, error.message);
+    }
   }
+  return successCount;
 }
