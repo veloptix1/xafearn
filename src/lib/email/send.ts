@@ -79,3 +79,37 @@ export async function sendBulkEmail(emails: string[], subject: string, message: 
   }
   return successCount;
 }
+
+export async function sendValidationEmail(email: string, name: string, views: number, gain: number) {
+  const subject = 'Ta diffusion a été validée';
+  const text = `Bonjour ${name},\n\nTa preuve de diffusion a été vérifiée et validée.\n\nVues vérifiées : ${views}\nGains crédités : ${gain.toFixed(2)} FCFA\n\nCes gains ont été ajoutés à ton solde XAFERAN.\n\nL'équipe XAFERAN`;
+  
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; color: #333;">
+      <h2>Félicitations ${name} !</h2>
+      <p>Ta preuve de diffusion a été vérifiée et validée par notre équipe.</p>
+      <div style="background-color: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0;">
+        <p style="margin: 0 0 10px 0;"><strong>Vues vérifiées :</strong> ${views}</p>
+        <p style="margin: 0;"><strong>Gains crédités :</strong> ${gain.toFixed(2)} FCFA</p>
+      </div>
+      <p>Ces gains ont été ajoutés à ton solde XAFERAN. Tu peux les retirer dès maintenant.</p>
+      <p style="margin-top: 30px;"><a href="https://xafearn-weld.vercel.app/dashboard" style="color: #0ea5e9;">Voir mon solde</a></p>
+      <p style="font-size: 12px; color: #777; margin-top: 30px;">L'équipe XAFERAN</p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
+      to: email,
+      subject,
+      text,
+      html,
+      headers: getAntiSpamHeaders(),
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error('Erreur email validation:', error.message);
+    return { success: false, error: error.message };
+  }
+}
