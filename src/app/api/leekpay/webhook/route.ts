@@ -1,64 +1,25 @@
 import { NextResponse } from 'next/server'
-import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+    const supabase = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!
+    )
 
-    if (!supabaseUrl || !supabaseKey) {
-      return new NextResponse('Configuration manquante', { status: 500 })
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseKey)
-
-    const rawBody = await req.text()
-    const signature = req.headers.get('x-leekpay-signature')
-    
-    const expectedSignature = crypto
-      .createHmac('sha256', process.env.LEEKPAY_PUBLIC_KEY || '')
-      .update(rawBody)
-      .digest('hex')
-
-    if (!signature || signature !== expectedSignature) {
-      return new NextResponse('Invalid signature', { status: 401 })
-    }
-
-    const body = JSON.parse(rawBody)
+    const body = await req.json()
     const { event, data } = body
 
     if (event !== 'payment.completed') {
       return NextResponse.json({ received: true })
     }
 
-    const checkoutId = data.checkout_id
-    const amount = data.amount
-    const userId = data.metadata?.user_id
-
-    if (!checkoutId || !userId) {
-      return new NextResponse('Missing data', { status: 400 })
-    }
-
-    await supabase
-      .from('leekpay_payments')
-      .update({ status: 'paid', paid_at: new Date().toISOString() })
-      .eq('checkout_id', checkoutId)
-
-    const { data: profile } = await supabase.from('profiles').select('balance').eq('id', userId).single()
-    
-    if (profile) {
-      await supabase.from('profiles').update({
-        balance: (profile.balance || 0) + amount
-      }).eq('id', userId)
-
-      await supabase.from('notifications').insert({
-        user_id: userId,
-        title: 'Recharge réussie 💰',
-        message: `Ton compte a été rechargé de ${amount.toLocaleString('fr-FR')} FCFA.`,
-        link: '/dashboard/annonceur/analytics'
-      })
-    }
+    await supabase.rpc('handle_leekpay_payment', {
+      p_checkout_id: data.checkout_id,
+      p_amount: data.amount,
+      p_user_id: data.metadata?.user_id
+    })
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
