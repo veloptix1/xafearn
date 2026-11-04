@@ -57,7 +57,7 @@ async function CatalogueContent() {
       ) : (
         <div className="space-y-4">
           
-          {/* L'annonce de bienvenue (toujours visible) */}
+          {/* L'annonce de bienvenue */}
           {welcomeCampaign && (
             <div>
               <div className="bg-white border-2 border-emerald-400 rounded-2xl shadow-md overflow-hidden flex flex-col hover:shadow-lg transition">
@@ -79,7 +79,7 @@ async function CatalogueContent() {
             </div>
           )}
 
-          {/* Les campagnes payantes (floutées si en mode test) */}
+          {/* Les campagnes payantes */}
           {paidCampaigns.length > 0 && (
             <div className="relative mt-8">
               <div className="flex items-center gap-2 mb-4">
@@ -95,9 +95,6 @@ async function CatalogueContent() {
                     {campaign.image_url && (
                       <div className="h-40 w-full bg-slate-100 relative">
                         <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" />
-                        <div className="absolute top-2 right-2 bg-white/90 backdrop-blur-sm px-2 py-1 rounded-md text-xs font-bold text-slate-900 shadow-sm">
-                          {campaign.views_purchased?.toLocaleString('fr-FR')} vues
-                        </div>
                       </div>
                     )}
                     <div className="p-4 flex-1 flex flex-col">
@@ -112,7 +109,6 @@ async function CatalogueContent() {
                 ))}
               </div>
 
-              {/* Message de blocage par-dessus */}
               {isInTestMode && (
                 <div className="absolute inset-0 flex items-center justify-center z-10">
                   <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-200 text-center max-w-xs mx-auto">
@@ -121,9 +117,9 @@ async function CatalogueContent() {
                     </div>
                     <h3 className="font-bold text-slate-900 text-sm mb-1">Campagnes verrouillées</h3>
                     <p className="text-xs text-slate-500 mb-4">Termine d'abord ta campagne test pour débloquer ces annonces et gagner plus.</p>
-                    <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="w-full py-2 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition">
+                    <Link href="#welcome" className="block w-full py-2 bg-slate-900 text-white font-bold text-xs rounded-lg hover:bg-slate-800 transition">
                       Voir l'annonce test
-                    </button>
+                    </Link>
                   </div>
                 </div>
               )}
