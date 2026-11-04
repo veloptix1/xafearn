@@ -153,7 +153,7 @@ export default function AdminTreasuresPage() {
                   <p className="font-bold text-amber-800 mb-2">Palier : {tierInfo.name.toUpperCase()} ({tierInfo.time}h)</p>
                   <p className="text-amber-700">Commission plateforme : <strong>{platformFee.toFixed(0)} F ({tierInfo.fee * 100}%)</strong></p>
                   <p className="text-amber-700">Cagnotte pour les gagnants : <strong>{prizePool.toFixed(0)} F</strong></p>
-                  <p className="text-amber-700 mt-1">Répartition : {tierInfo.winners.length} gagnant(s) ({(tierInfo.winners.map(w => `${w * 100}%`).join(' / ')}))</p>
+                  <p className="text-amber-700 mt-1">Répartition : {tierInfo.winners.length} gagnant(s) ({tierInfo.winners.map(w => `${w * 100}%`).join(' / ')})</p>
                 </div>
               )}
 
