@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -54,7 +54,7 @@ export default function ReseauPage() {
     const { data: p } = await query
     
     if (p && p.length > 0) {
-      // Pour chaque post, on récupère le nombre de commentaires
+      // On récupère le nombre de commentaires pour chaque post
       const postsWithCounts = await Promise.all(p.map(async (post) => {
         const { count } = await supabase
           .from('post_comments')
@@ -108,7 +108,7 @@ export default function ReseauPage() {
         const fileName = `post-${profile.id}-${Date.now()}.jpg`
         const { error: uploadError } = await supabase.storage.from('campaign-images').upload(fileName, compressedBlob)
         if (uploadError) throw uploadError
-        const { data } = await supabase.storage.from('campaign-images').getPublicUrl(fileName)
+        const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         imageUrl = data.publicUrl
       }
 
@@ -142,12 +142,12 @@ export default function ReseauPage() {
       await supabase.from('profiles').update({ coins_balance: profile.coins_balance - coinAmount }).eq('id', profile.id)
       setProfile({ ...profile, coins_balance: profile.coins_balance - coinAmount })
       await supabase.from('posts').update({ total_coins_received: (activePost.total_coins_received || 0) + coinAmount }).eq('id', activePost.id)
+      
       await supabase.from('notifications').insert({
-        user_id: activePost.user_id, 
-        title: 'Jetons reçus ! 🪙',
-        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}. Tu peux les convertir en argent réel.`, 
-        link: '/dashboard/jetons/retirer'
+        user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
+        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`, link: '/dashboard/jetons/retirer'
       })
+      
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
       loadPosts()
@@ -172,7 +172,6 @@ export default function ReseauPage() {
         post_id: activeCommentPost.id, user_id: profile.id, content: newComment.trim()
       })
       
-      // Notification pour le créateur du post
       if (activeCommentPost.user_id !== profile.id) {
         await supabase.from('notifications').insert({
           user_id: activeCommentPost.user_id,
@@ -181,9 +180,11 @@ export default function ReseauPage() {
           link: '/dashboard/reseau'
         })
       }
+
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
+      loadPosts() // Recharger pour mettre à jour le compteur
     } catch (err) {
       showToast('Erreur lors du commentaire.', 'error')
     }
@@ -203,7 +204,7 @@ export default function ReseauPage() {
 
       {/* HEADER */}
       <header className="fixed top-0 inset-x-0 z-50 px-4 py-3 bg-black/80 backdrop-blur-md border-b border-white/10 flex justify-between items-center">
-        <Link href="/dashboard" className="text-white bg-white/20 p-2 rounded-full backdrop-blur-md">
+        <Link href="/dashboard" className="text-white bg-white/10 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
         
@@ -213,9 +214,9 @@ export default function ReseauPage() {
           <button onClick={() => setActiveTab('top')} className={activeTab === 'top' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}>Top</button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full shadow-lg">+ Acheter</Link>
-        </div>
+        <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full">
+          + Acheter
+        </Link>
       </header>
 
       {/* FEED */}
@@ -227,21 +228,21 @@ export default function ReseauPage() {
           </div>
         ) : (
           posts.map(post => (
-            <div key={post.id} className="mb-8 px-4">
-              <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10">
+            <div key={post.id} className="mb-6 px-4">
+              <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg">
                 
                 {/* En-tête du post */}
                 <div className="flex items-center gap-3 p-3">
-                  <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white shadow-sm">
+                  <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
                     {post.profiles?.full_name?.charAt(0)}
                   </div>
                   <div>
                     <p className="font-bold text-sm">@{post.profiles?.full_name}</p>
-                    <p className="text-[10px] text-slate-400">Il y a quelques instants</p>
+                    <p className="text-[10px] text-slate-400">Publication</p>
                   </div>
                 </div>
 
-                {/* Image adaptée */}
+                {/* Image */}
                 {post.content_type === 'image' && post.image_url && (
                   <div className="w-full bg-black flex justify-center">
                     <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain" alt="Post" />
@@ -270,7 +271,7 @@ export default function ReseauPage() {
         )}
       </div>
 
-      {/* BOUTON PUBLIER FLOTTANT */}
+      {/* BOUTON PUBLIER */}
       <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50 hover:scale-110 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
@@ -284,7 +285,7 @@ export default function ReseauPage() {
               <textarea placeholder="Quoi de neuf ?" value={newText} onChange={e => setNewText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" rows={4} />
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative">
                 <input type="file" accept="image/*" onChange={e => setNewImage(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                {newImage ? <p className="text-sm text-emerald-600 font-medium">Image sélectionnée (compressée)</p> : <p className="text-sm text-slate-500">Ajouter une image</p>}
+                {newImage ? <p className="text-sm text-emerald-600 font-medium">Image sélectionnée</p> : <p className="text-sm text-slate-500">Ajouter une image</p>}
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={() => setIsCreateOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
