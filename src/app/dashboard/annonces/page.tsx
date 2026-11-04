@@ -9,23 +9,23 @@ async function CatalogueContent() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  // 1. D'abord, on récupère le profil
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+  
+  // Calcul du taux de gain selon le niveau
+  const level = profile?.level || 1
+  const gainPerView = level === 1 ? 0.50 : level === 2 ? 1.25 : 1.75
 
-  // 2. Ensuite, on récupère les campagnes
   const { data: campaigns } = await supabase
     .from('campaigns')
     .select('*')
     .eq('status', 'active')
     .order('created_at', { ascending: false })
 
-  // 3. Enfin, on récupère les soumissions
   const { data: submissions } = await supabase
     .from('ad_submissions')
     .select('*')
     .eq('user_id', user.id)
 
-  // 4. Maintenant on peut calculer si on est en test
   const hasValidatedTest = submissions?.some(s => s.status === 'validated' && campaigns?.find(c => c.id === s.campaign_id)?.is_welcome_campaign)
   const isInTestMode = profile?.is_test_mode === true && !hasValidatedTest
 
@@ -49,7 +49,7 @@ async function CatalogueContent() {
           </div>
           <div>
             <h3 className="font-bold text-amber-800 text-sm">Mode Test Actif</h3>
-            <p className="text-amber-700 text-xs mt-1">Publie l'annonce recommandée ci-dessous pour prouver ta fiabilité et débloquer toutes les campagnes payantes.</p>
+            <p className="text-amber-700 text-xs mt-1">Publie l'annonce recommandée ci-dessous pour débloquer les campagnes payantes.</p>
           </div>
         </div>
       )}
@@ -75,6 +75,18 @@ async function CatalogueContent() {
               <div className="p-5">
                 <h3 className="font-bold text-lg text-slate-900 mb-2">{welcomeCampaign.title}</h3>
                 <p className="text-sm text-slate-500 mb-4 line-clamp-3">{welcomeCampaign.description}</p>
+                
+                {/* On affiche 0 F car c'est une campagne test */}
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-xs text-slate-500">Gain par vue</p>
+                    <p className="text-xl font-black text-emerald-600">0,00 F</p>
+                  </div>
+                  <span className="bg-purple-50 text-purple-700 text-xs font-bold px-2 py-1 rounded border border-purple-100">
+                    Test (Gratuit)
+                  </span>
+                </div>
+
                 <DiffusionModal campaign={welcomeCampaign} userId={user.id} submission={submissions?.find(s => s.campaign_id === welcomeCampaign.id)} />
               </div>
             </div>
@@ -102,11 +114,23 @@ async function CatalogueContent() {
                       </div>
                     )}
                     <div className="p-4 flex-1 flex flex-col">
-                      <div className="flex justify-between items-start mb-2">
-                        <h3 className="font-bold text-slate-900 line-clamp-1">{campaign.title}</h3>
-                        {campaign.price > 0 && <span className="font-black text-emerald-600 whitespace-nowrap ml-2">{campaign.price} F</span>}
-                      </div>
+                      <h3 className="font-bold text-slate-900 line-clamp-1 mb-1">{campaign.title}</h3>
                       <p className="text-sm text-slate-500 line-clamp-2 mb-4 flex-1">{campaign.description}</p>
+                      
+                      {/* ICI : On affiche le gain du diffuseur selon SON niveau */}
+                      <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 mb-4 flex items-center justify-between">
+                        <div>
+                          <p className="text-[10px] font-bold text-emerald-700 uppercase tracking-wider">Ton gain / vue</p>
+                          <p className="text-lg font-black text-emerald-600">{gainPerView.toFixed(2)} F</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Gain max</p>
+                          <p className="text-sm font-bold text-slate-700">
+                            {(gainPerView * (campaign.views_purchased || 1000)).toLocaleString('fr-FR')} F
+                          </p>
+                        </div>
+                      </div>
+
                       <DiffusionModal campaign={campaign} userId={user.id} submission={submissions?.find(s => s.campaign_id === campaign.id)} />
                     </div>
                   </div>
