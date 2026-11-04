@@ -77,26 +77,27 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
 
       {/* Sélecteur de Mode (caché pour les admins) */}
       {profile?.role !== 'admin' && (
-      <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mb-6">
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Mode d'utilisation</p>
-        <div className="flex bg-slate-100 p-1 rounded-xl">
-          <button 
-            onClick={() => isAnnonceurMode && toggleMode()} 
-            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${!isAnnonceurMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
-          >
-            💰 Diffuseur
-          </button>
-          <button 
-            onClick={() => !isAnnonceurMode && toggleMode()} 
-            className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isAnnonceurMode ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}
-          >
-            📢 Annonceur
-          </button>
+        <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mb-6">
+          <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Mode d'utilisation</p>
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button 
+              onClick={() => isAnnonceurMode && toggleMode()} 
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${!isAnnonceurMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              💰 Diffuseur
+            </button>
+            <button 
+              onClick={() => !isAnnonceurMode && toggleMode()} 
+              className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isAnnonceurMode ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}
+            >
+              📢 Annonceur
+            </button>
+          </div>
+          <p className="text-[10px] text-slate-400 mt-2 text-center">
+            {isAnnonceurMode ? 'Tu es en mode annonceur. Crée et gère tes campagnes publicitaires.' : 'Tu es en mode diffuseur. Gagne de l\'argent en publiant des annonces.'}
+          </p>
         </div>
-        <p className="text-[10px] text-slate-400 mt-2 text-center">
-          {isAnnonceurMode ? 'Tu es en mode annonceur. Crée et gère tes campagnes publicitaires.' : 'Tu es en mode diffuseur. Gagne de l\'argent en publiant des annonces.'}
-        </p>
-      </div>
+      )}
 
       {/* Menu des options */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6">
