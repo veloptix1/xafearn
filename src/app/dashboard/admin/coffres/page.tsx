@@ -13,21 +13,18 @@ export default function AdminTreasuresPage() {
   const [winners, setWinners] = useState<any[]>([])
   const [isModalOpen, setIsModalOpen] = useState(false)
   
-  // Toast
+  // Déclaration correcte de deleteConfirm
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
+
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
 
-  // Confirmation de suppression
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
-
-  // Formulaire
   const [sponsorName, setSponsorName] = useState('')
   const [sponsorLogo, setSponsorLogo] = useState('')
   const [totalAmount, setTotalAmount] = useState('')
   const [secretCode, setSecretCode] = useState('')
   const [links, setLinks] = useState<any[]>([])
 
-  // Calcul des paliers
   const getTier = (amount: number) => {
     if (amount >= 50000) return { name: 'diamant', fee: 0.15, winners: [0.40, 0.25, 0.15, 0.10, 0.10], time: 72, color: 'purple' }
     if (amount >= 10000) return { name: 'or', fee: 0.20, winners: [0.50, 0.30, 0.20], time: 48, color: 'amber' }
@@ -109,6 +106,7 @@ export default function AdminTreasuresPage() {
     loadData()
   }
 
+  // Correction de la fonction : elle ne prend plus de paramètre 'id'
   const deleteTreasure = async () => {
     if (!deleteConfirm) return
     await supabase.from('treasures').delete().eq('id', deleteConfirm)
@@ -141,9 +139,7 @@ export default function AdminTreasuresPage() {
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-4">
         {treasures.length === 0 ? (
-          <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500">
-            Aucun coffre créé pour le moment.
-          </div>
+          <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500">Aucun coffre créé pour le moment.</div>
         ) : (
           treasures.map(t => {
             const treasureWinners = winners.filter(w => w.treasure_id === t.id)
@@ -155,7 +151,7 @@ export default function AdminTreasuresPage() {
                   <div>
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="font-bold text-lg text-slate-900">{t.sponsor_name}</h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-100 text-${t.tier === 'diamant' ? 'purple' : t.tier === 'or' ? 'amber' : t.tier === 'argent' ? 'slate' : 'orange'}-700`}>{t.tier}</span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-slate-100 text-slate-600">{t.tier}</span>
                       {t.status === 'active' && !isExpired ? (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Actif</span>
                       ) : (
@@ -257,7 +253,7 @@ export default function AdminTreasuresPage() {
                       <option value="facebook">Facebook</option>
                     </select>
                     <input type="url" required placeholder="URL de la vidéo" value={link.url} onChange={e => updateLink(i, 'url', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
-                    <input type="text" required placeholder="Indice caché (ex: 'Le chiffre est 4')" value={link.hint} onChange={e => updateLink(i, 'hint', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
+                    <input type="text" required placeholder="Indice caché" value={link.hint} onChange={e => updateLink(i, 'hint', e.target.value)} className="w-full p-2 border border-slate-200 rounded-lg text-sm" />
                   </div>
                 ))}
               </div>
