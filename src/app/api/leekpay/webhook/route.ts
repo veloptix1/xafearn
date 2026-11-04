@@ -4,11 +4,12 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
   try {
+    // On initialise Supabase UNIQUEMENT quand la requête arrive
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
     if (!supabaseUrl || !supabaseKey) {
-      console.error('Variables Supabase manquantes')
+      console.error('Variables manquantes au runtime')
       return new NextResponse('Configuration manquante', { status: 500 })
     }
 
@@ -23,7 +24,6 @@ export async function POST(req: Request) {
       .digest('hex')
 
     if (!signature || signature !== expectedSignature) {
-      console.error('Signature invalide')
       return new NextResponse('Invalid signature', { status: 401 })
     }
 
@@ -63,7 +63,7 @@ export async function POST(req: Request) {
       await supabase.from('notifications').insert({
         user_id: userId,
         title: 'Recharge réussie 💰',
-        message: `Ton compte a été rechargé de ${amount.toLocaleString('fr-FR')} FCFA. Tu peux maintenant lancer tes campagnes.`,
+        message: `Ton compte a été rechargé de ${amount.toLocaleString('fr-FR')} FCFA.`,
         link: '/dashboard/annonceur/analytics'
       })
     }
