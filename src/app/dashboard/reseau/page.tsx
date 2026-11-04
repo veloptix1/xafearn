@@ -130,8 +130,10 @@ export default function ReseauPage() {
       setProfile({ ...profile, coins_balance: profile.coins_balance - coinAmount })
       await supabase.from('posts').update({ total_coins_received: (activePost.total_coins_received || 0) + coinAmount }).eq('id', activePost.id)
       await supabase.from('notifications').insert({
-        user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
-        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`, link: '/dashboard/jetons/retirer'
+        user_id: activePost.user_id, 
+        title: 'Jetons reçus ! 🪙',
+        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}. Tu peux les convertir en argent réel.`, 
+        link: '/dashboard/jetons/retirer'
       })
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
@@ -156,6 +158,16 @@ export default function ReseauPage() {
       await supabase.from('post_comments').insert({
         post_id: activeCommentPost.id, user_id: profile.id, content: newComment.trim()
       })
+      
+      // Notification pour le créateur du post
+      if (activeCommentPost.user_id !== profile.id) {
+        await supabase.from('notifications').insert({
+          user_id: activeCommentPost.user_id,
+          title: 'Nouveau commentaire 💬',
+          message: `${profile.full_name} a commenté ta publication : "${newComment.trim().substring(0, 50)}..."`,
+          link: '/dashboard/reseau'
+        })
+      }
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
@@ -177,7 +189,7 @@ export default function ReseauPage() {
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
       {/* HEADER */}
-      <header className="fixed top-0 inset-x-0 z-50 px-4 py-3 flex justify-between items-center bg-gradient-to-b from-black/90 to-transparent">
+      <header className="fixed top-0 inset-x-0 z-50 px-4 py-3 bg-black/80 backdrop-blur-md border-b border-white/10 flex justify-between items-center">
         <Link href="/dashboard" className="text-white bg-white/20 p-2 rounded-full backdrop-blur-md">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
@@ -207,12 +219,12 @@ export default function ReseauPage() {
                 
                 {/* En-tête du post */}
                 <div className="flex items-center gap-3 p-3">
-                  <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
+                  <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white shadow-sm">
                     {post.profiles?.full_name?.charAt(0)}
                   </div>
                   <div>
                     <p className="font-bold text-sm">@{post.profiles?.full_name}</p>
-                    <p className="text-xs text-slate-400">Publication</p>
+                    <p className="text-[10px] text-slate-400">Il y a quelques instants</p>
                   </div>
                 </div>
 
