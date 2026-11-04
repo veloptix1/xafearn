@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
+import WelcomePopup from '@/components/WelcomePopup'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -32,6 +33,7 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
+      <WelcomePopup />
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
         <img src="/logo.png" alt="XAFEARN" className="h-7 w-auto object-contain" />
