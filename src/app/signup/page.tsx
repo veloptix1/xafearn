@@ -69,8 +69,14 @@ export default function SignupPage() {
       // Envoi de l'email de bienvenue en arrière-plan
       try {
         await onUserSignup(data.user.id, email, fullName)
+        // Appel à l'API pour envoyer l'email (côté client, Vercel ne coupe pas)
+        fetch('/api/send-welcome', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, name: fullName })
+        }).catch(console.error)
       } catch (err) {
-        console.log('Erreur email:', err)
+        console.log('Erreur:', err)
       }
     }
 
