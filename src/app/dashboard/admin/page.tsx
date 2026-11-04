@@ -167,7 +167,7 @@ async function AdminContent() {
                   {s.proof_video_url && <video src={s.proof_video_url} controls className="w-full max-h-48 rounded-lg bg-black mb-3" />}
                   
                   {/* Formulaire de validation avec confirmation */}
-                  <form action={validateSubmission} onSubmit={(e) => { if(!confirm(`Valider ${views} vues ?`)) e.preventDefault() }} className="flex gap-2 items-end mt-2">
+                  <form action={validateSubmission} onSubmit={(e) => { if(!confirm('Confirmer la validation de cette preuve ?')) e.preventDefault() }} className="flex gap-2 items-end mt-2">
                     <input type="hidden" name="id" value={s.id} />
                     <div className="flex-1">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">Vues vérifiées</label>
