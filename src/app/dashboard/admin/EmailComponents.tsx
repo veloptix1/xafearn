@@ -310,6 +310,14 @@ export function TaskAdminSection() {
               <div key={s.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
                 <h3 className="font-bold text-slate-900 text-sm">{task.title}</h3>
                 <p className="text-xs text-slate-500 mb-3">Gain : {task.reward} FCFA</p>
+                {s.proof_screenshot_url && (
+                  <div className="mb-3">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Capture d'écran</p>
+                    <a href={s.proof_screenshot_url} target="_blank" rel="noopener noreferrer">
+                      <img src={s.proof_screenshot_url} className="w-full max-h-40 object-cover rounded-lg border border-slate-200" />
+                    </a>
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={() => handleValidate(s.id, s.user_id, s.task_id, task.reward)} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg">Valider</button>
                   <button onClick={() => handleReject(s.id)} className="flex-1 py-2 bg-red-50 text-red-600 font-bold text-sm rounded-lg border border-red-200">Rejeter</button>

@@ -19,6 +19,8 @@ export default function AdminTasksPage() {
   const [actionUrl, setActionUrl] = useState('')
   const [reward, setReward] = useState('')
   const [type, setType] = useState('subscribe')
+  const [imageUrl, setImageUrl] = useState('')
+  const [uploading, setUploading] = useState(false)
 
   useEffect(() => {
     loadTasks()
@@ -38,9 +40,19 @@ export default function AdminTasksPage() {
 
   const showToast = (msg: string) => { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    setUploading(true)
+    const fileName =     const { error } = await supabase.storage.from('campaign-images').upload(fileName, file)
+      const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
+      setImageUrl(data.publicUrl)
+    }
+    setUploading(false)
+  }
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()
-    const taskData = { title, description, action_url: actionUrl, reward: parseFloat(reward), type, status: 'active' }
+    const taskData = { title, description, action_url: actionUrl, reward: parseFloat(reward), type, status: 'active', image_url: imageUrl }
 
     if (editingTask) {
       await supabase.from('tasks').update(taskData).eq('id', editingTask.id)
@@ -76,7 +88,7 @@ export default function AdminTasksPage() {
           </Link>
           <h1 className="text-lg font-bold text-slate-900">Gestion des Tâches</h1>
         </div>
-        <button onClick={() => { setEditingTask(null); setTitle(''); setDescription(''); setActionUrl(''); setReward(''); setIsModalOpen(true) }} className="px-4 py-2 bg-sky-500 text-white text-sm font-bold rounded-xl hover:bg-sky-400">+ Nouvelle tâche</button>
+        <button onClick={() => { setEditingTask(null); setTitle(''); setDescription(''); setActionUrl(''); setReward(''); setIsModalOpen(true); setImageUrl('') }} className="px-4 py-2 bg-sky-500 text-white text-sm font-bold rounded-xl hover:bg-sky-400">+ Nouvelle tâche</button>
       </header>
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-3">
@@ -84,17 +96,20 @@ export default function AdminTasksPage() {
         
         {tasks.map(task => (
           <div key={task.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
+            <div className="flex items-center gap-3">
+              {task.image_url && <img src={task.image_url} className="w-12 h-12 rounded-lg object-cover" />}
+              <div>
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-slate-900">{task.title}</h3>
                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${task.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500'}`}>{task.status}</span>
               </div>
               <p className="text-sm text-slate-500 mt-1">{task.description}</p>
               <p className="text-xs text-emerald-600 font-bold mt-2">Gain : {task.reward} FCFA • {task.type}</p>
+              </div>
             </div>
             <div className="flex gap-2 shrink-0">
               <button onClick={() => toggleStatus(task)} className="px-3 py-1.5 bg-slate-100 text-slate-700 text-xs font-bold rounded-lg">{task.status === 'active' ? 'Pause' : 'Activer'}</button>
-              <button onClick={() => { setEditingTask(task); setTitle(task.title); setDescription(task.description); setActionUrl(task.action_url); setReward(task.reward.toString()); setType(task.type); setIsModalOpen(true) }} className="px-3 py-1.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-lg">Modifier</button>
+              <button onClick={() => { setEditingTask(task); setTitle(task.title); setDescription(task.description); setActionUrl(task.action_url); setReward(task.reward.toString()); setType(task.type); setImageUrl(task.image_url || ''); setIsModalOpen(true) }} className="px-3 py-1.5 bg-sky-100 text-sky-700 text-xs font-bold rounded-lg">Modifier</button>
               <button onClick={() => deleteTask(task.id)} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Suppr.</button>
             </div>
           </div>
@@ -118,6 +133,17 @@ export default function AdminTasksPage() {
                   <option value="share">Partager</option>
                   <option value="custom">Autre</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Image de la tâche (optionnel)</label>
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center relative">
+                  <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  {imageUrl ? (
+                    <img src={imageUrl} className="h-16 mx-auto rounded-lg object-cover" />
+                  ) : (
+                    <p className="text-xs text-slate-500">{uploading ? 'Upload...' : 'Ajouter une image'}</p>
+                  )}
+                </div>
               </div>
               <div className="flex gap-2 mt-4">
                 <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
