@@ -1,18 +1,22 @@
 import nodemailer from 'nodemailer';
 
+// Configuration stricte pour Vercel (Port 465 + SSL)
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_APP_PASSWORD,
   },
+  connectionTimeout: 10000, // 10 secondes max
 });
 
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://xafearn-weld.vercel.app';
 
 export async function sendWelcomeEmail(email: string, name: string) {
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: 'Bienvenue sur XAFERAN ! 🚀',
@@ -33,19 +37,23 @@ export async function sendWelcomeEmail(email: string, name: string) {
               Accéder à mon tableau de bord
             </a>
           </div>
+          <p style="font-size: 12px; color: #64748b; text-align: center; margin-top: 40px;">
+            L'équipe XAFERAN
+          </p>
         </div>
       `,
     });
+    console.log('Email de bienvenue envoyé:', info.messageId);
     return { success: true };
   } catch (err) {
-    console.error('Erreur welcome email:', err);
+    console.error('ERREUR ENVOI EMAIL BIENVENUE:', err);
     return { success: false, error: err };
   }
 }
 
 export async function sendValidationEmail(email: string, name: string, views: number, gain: number) {
   try {
-    await transporter.sendMail({
+    const info = await transporter.sendMail({
       from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
       to: email,
       subject: '✅ Ta diffusion a été validée et payée !',
@@ -66,35 +74,10 @@ export async function sendValidationEmail(email: string, name: string, views: nu
         </div>
       `,
     });
+    console.log('Email de validation envoyé:', info.messageId);
     return { success: true };
   } catch (err) {
-    console.error('Erreur validation email:', err);
-    return { success: false, error: err };
-  }
-}
-
-export async function sendReminderEmail(email: string, name: string) {
-  try {
-    await transporter.sendMail({
-      from: `"XAFERAN" <${process.env.GMAIL_USER}>`,
-      to: email,
-      subject: '⏰ N\'oublie pas de vérifier ton statut !',
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #0f172a;">
-          <h1 style="color: #f59e0b;">Salut ${name},</h1>
-          <p>Tu as publié une annonce sur ton statut WhatsApp il y a 24h. N'oublie pas d'envoyer ta preuve pour valider tes gains !</p>
-          <div style="text-align: center; margin: 40px 0;">
-            <a href="${APP_URL}/dashboard/annonces" style="background-color: #0ea5e9; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold;">
-              Envoyer ma preuve
-            </a>
-          </div>
-          <p style="font-size: 12px; color: #64748b;">Si tu as déjà envoyé ta preuve, ignore cet email.</p>
-        </div>
-      `,
-    });
-    return { success: true };
-  } catch (err) {
-    console.error('Erreur reminder email:', err);
+    console.error('ERREUR ENVOI EMAIL VALIDATION:', err);
     return { success: false, error: err };
   }
 }
