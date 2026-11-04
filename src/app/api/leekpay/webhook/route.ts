@@ -2,9 +2,6 @@ import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { createClient } from '@supabase/supabase-js'
 
-export const runtime = 'nodejs'
-export const revalidate = 0
-
 export async function POST(req: Request) {
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
