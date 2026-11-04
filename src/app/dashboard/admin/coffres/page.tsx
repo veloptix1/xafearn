@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Toast from '@/components/Toast'
 import { createClient } from '@/lib/supabase/client'
 
 export default function AdminTreasuresPage() {
@@ -135,7 +136,7 @@ export default function AdminTreasuresPage() {
       </header>
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-2 space-y-4">
-        {toast && <div className="bg-slate-900 text-white p-3 rounded-xl text-center text-sm font-bold">{toast}</div>}
+        {toast && <Toast message={toast} type={toast.includes('succès') || toast.includes('créé') ? 'success' : 'error'} onClose={() => setToast(null)} />}
         
         {treasures.length === 0 ? (
           <div className="bg-white border border-slate-200 p-8 rounded-3xl text-center text-slate-500">
@@ -166,7 +167,7 @@ export default function AdminTreasuresPage() {
                     {t.status === 'active' && (
                       <button onClick={() => closeTreasure(t.id)} className="px-3 py-1.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-lg">Clôturer</button>
                     )}
-                    <button onClick={() => deleteTreasure(t.id)} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Supprimer</button>
+                    <button onClick={() => setDeleteConfirm(t.id)} className="px-3 py-1.5 bg-red-100 text-red-700 text-xs font-bold rounded-lg">Supprimer</button>
                   </div>
                 </div>
 
@@ -194,6 +195,23 @@ export default function AdminTreasuresPage() {
           })
         )}
       </div>
+
+      {/* MODAL DE CONFIRMATION DE SUPPRESSION */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-sm shadow-2xl p-6 text-center">
+            <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </div>
+            <h3 className="font-bold text-lg mb-2">Supprimer ce coffre ?</h3>
+            <p className="text-sm text-slate-500 mb-6">Cette action est irréversible. Toutes les données associées seront perdues.</p>
+            <div className="flex gap-2">
+              <button onClick={() => setDeleteConfirm(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+              <button onClick={deleteTreasure} className="flex-1 py-3 bg-red-500 text-white font-bold rounded-xl">Supprimer</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE CRÉATION */}
       {isModalOpen && (
