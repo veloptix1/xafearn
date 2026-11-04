@@ -205,7 +205,7 @@ export default function ReseauPage() {
       </header>
 
       {/* BOUTON PUBLIER FLOTTANT */}
-      <button onClick={() => setIsCreateOpen(true)} className="absolute bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50 hover:scale-110 transition">
+      <button onClick={() => setIsCreateOpen(true)} className="absolute bottom-24 right-4 z-50 w-12 h-12 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50 hover:scale-110 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
@@ -222,7 +222,12 @@ export default function ReseauPage() {
               
               {/* Image ou Texte */}
               {post.content_type === 'image' && post.image_url ? (
-                <img src={post.image_url} className="w-full h-full object-cover" />
+                <div className="relative w-full h-full flex items-center justify-center bg-black">
+                  {/* Fond flou pour combler les vides */}
+                  <img src={post.image_url} className="absolute inset-0 w-full h-full object-cover blur-xl opacity-50" />
+                  {/* Image principale adaptée à l'écran */}
+                  <img src={post.image_url} className="relative z-10 w-full h-full object-contain" />
+                </div>
               ) : (
                 <div className="w-full h-full flex items-center justify-center p-8 bg-gradient-to-br from-slate-800 to-slate-900">
                   <p className="text-2xl font-bold text-center leading-relaxed">{post.text_content}</p>
@@ -250,7 +255,7 @@ export default function ReseauPage() {
               <div className="absolute bottom-6 right-4 z-10 flex flex-col items-center gap-6">
                 {/* Bouton Cadeau */}
                 <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/40 hover:scale-110 transition mb-1 relative">
+                  <div className="w-11 h-11 bg-amber-500 rounded-full flex items-center justify-center shadow-lg shadow-amber-500/40 hover:scale-110 transition mb-1 relative">
                     <svg className="w-6 h-6 text-black" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
                   </div>
                   <span className="text-[10px] font-bold">Soutenir</span>
@@ -258,7 +263,7 @@ export default function ReseauPage() {
 
                 {/* Bouton Commentaires */}
                 <button onClick={() => openComments(post)} className="flex flex-col items-center">
-                  <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition mb-1">
+                  <div className="w-11 h-11 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center hover:bg-white/30 transition mb-1">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                   </div>
                   <span className="text-[10px] font-bold">Commenter</span>
