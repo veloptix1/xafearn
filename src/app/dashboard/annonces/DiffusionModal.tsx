@@ -28,6 +28,24 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     showToast('Texte copié !')
   }
 
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(campaign.image_url)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `annonce-${campaign.id}.jpg`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      showToast('Image téléchargée !')
+    } catch (err) {
+      showToast('Erreur lors du téléchargement.')
+    }
+  }
+
   // Étape 1 : L'utilisateur a publié, on crée une soumission "pending" SANS preuve
   const handlePublish = async () => {
     setLoading(true)
@@ -148,10 +166,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                 <>
                   <div>
                     <p className="text-sm font-bold text-slate-900 mb-2">1. Téléchargez l'image</p>
-                    <a href={campaign.image_url} download className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
+                    <button onClick={handleDownload} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
                       <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                       Télécharger l'image
-                    </a>
+                    </button>
                   </div>
 
                   <div>
