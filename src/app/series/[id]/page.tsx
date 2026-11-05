@@ -150,8 +150,22 @@ export default function SeriesReaderPage() {
             {series.content_type === 'image' && activeEpisode.content_media_url && (
               <img src={activeEpisode.content_media_url} className="w-full rounded-xl" />
             )}
-            {series.content_type === 'video' && activeEpisode.content_media_url && (
-              <video src={activeEpisode.content_media_url} controls className="w-full rounded-xl bg-black" />
+            {series.content_type === 'video' && (
+              <div>
+                {activeEpisode.content_media_url ? (
+                  <video 
+                    src={activeEpisode.content_media_url} 
+                    controls 
+                    playsInline
+                    className="w-full rounded-xl bg-black"
+                    onError={(e) => console.error('Erreur vidéo:', activeEpisode.content_media_url)}
+                  />
+                ) : (
+                  <div className="bg-slate-100 rounded-xl p-8 text-center text-slate-500">
+                    ⚠️ Vidéo manquante. Contacte le créateur.
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

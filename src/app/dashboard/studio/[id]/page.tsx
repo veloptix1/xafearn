@@ -91,6 +91,7 @@ export default function SeriesEditorPage() {
     try {
       let mediaUrl = null
       if (series.content_type !== 'text' && epMedia) {
+        // Vérifier la durée si c'est une vidéo
         if (series.content_type === 'video') {
           const video = document.createElement('video')
           video.preload = 'metadata'
@@ -103,11 +104,20 @@ export default function SeriesEditorPage() {
             video.src = URL.createObjectURL(epMedia!)
           })
         }
-        const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${series.content_type === 'video' ? 'mp4' : 'jpg'}`
-        const { error: upErr } = await supabase.storage.from('campaign-images').upload(fileName, epMedia)
-        if (upErr) throw upErr
+
+        // Déterminer l'extension
+        const ext = epMedia.name.split('.').pop() || (series.content_type === 'video' ? 'mp4' : 'jpg')
+        const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
+        
+        const { error: upErr } = await supabase.storage
+          .from('campaign-images')
+          .upload(fileName, epMedia, { contentType: epMedia.type })
+        
+        if (upErr) throw new Error('Upload échoué : ' + upErr.message)
+        
         const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         mediaUrl = data.publicUrl
+        
       }
 
       const { error } = await supabase.from('episodes').insert({
