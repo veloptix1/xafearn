@@ -72,40 +72,6 @@ export default function ReseauPage() {
   async function fetchPosts(prof: any, pageNumber: number) {
     const from = pageNumber * POSTS_PER_PAGE
     const to = from + POSTS_PER_PAGE - 1
-
-    if (activeTab === 'pour-toi') {
-      // ALGORITHME DE VIRALITÉ
-      const { data: viralPosts } = await supabase.rpc('get_viral_feed', {
-        p_user_id: prof.id,
-        p_limit: POSTS_PER_PAGE,
-        p_offset: from
-      })
-      
-      if (viralPosts && viralPosts.length > 0) {
-        const formattedPosts = viralPosts.map((p: any) => ({
-          id: p.id,
-          user_id: p.user_id,
-          content_type: p.content_type,
-          text_content: p.text_content,
-          image_url: p.image_url,
-          total_coins_received: p.total_coins_received,
-          created_at: p.created_at,
-          comments_count: p.comments_count,
-          profiles: { full_name: p.full_name }
-        }))
-        
-        if (pageNumber === 0) setPosts(formattedPosts)
-        else setPosts(prev => [...prev, ...formattedPosts])
-        
-        setHasMore(viralPosts.length === POSTS_PER_PAGE)
-      } else {
-        if (pageNumber === 0) setPosts([])
-        setHasMore(false)
-      }
-      return
-    }
-
-    // Pour les autres onglets (Récents et Abonnements), on garde la logique normale
     let query = supabase.from('posts').select('*, profiles(full_name)')
 
     if (activeTab === 'recents') {
@@ -117,6 +83,8 @@ export default function ReseauPage() {
         setPosts([]); setHasMore(false); return
       }
       query = query.in('user_id', followingIds).order('created_at', { ascending: false })
+    } else {
+      query = query.order('created_at', { ascending: false })
     }
 
     query = query.range(from, to)
@@ -127,6 +95,14 @@ export default function ReseauPage() {
         const { count } = await supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id)
         return { ...post, comments_count: count || 0 }
       }))
+      
+      if (activeTab === 'pour-toi') {
+        postsWithCounts.sort((a, b) => {
+          const scoreA = (a.total_coins_received || 0) * 3 + (a.comments_count || 0) * 2
+          const scoreB = (b.total_coins_received || 0) * 3 + (b.comments_count || 0) * 2
+          return scoreB - scoreA
+        })
+      }
       
       if (pageNumber === 0) setPosts(postsWithCounts)
       else setPosts(prev => [...prev, ...postsWithCounts])
@@ -484,7 +460,6 @@ export default function ReseauPage() {
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* Modal Création */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -510,7 +485,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Modification */}
       {editingPost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -526,7 +500,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Suppression */}
       {deletingPostId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900 shadow-2xl">
@@ -543,7 +516,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Jetons */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900 shadow-2xl">
@@ -566,7 +538,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Commentaires */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
           <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
