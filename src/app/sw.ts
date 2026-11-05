@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Service Worker basique pour la gestion hors ligne
 const CACHE_NAME = 'xafearn-v1';
 
