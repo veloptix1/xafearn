@@ -19,9 +19,11 @@ export default function SeriesEditorPage() {
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isEditSeriesOpen, setIsEditSeriesOpen] = useState(false)
   
+  // Edit Series States
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
   
+  // Add Episode States
   const [epTitle, setEpTitle] = useState('')
   const [epText, setEpText] = useState('')
   const [epMedia, setEpMedia] = useState<File | null>(null)
@@ -140,7 +142,8 @@ export default function SeriesEditorPage() {
         content_text: series.content_type === 'text' ? epText : null,
         content_media_url: mediaUrl,
         is_free: isFree,
-        price_in_coins: isFree ? 0 : epPrice
+        // ✅ CORRECTION ICI : On envoie null au lieu de 0 pour les gratuits
+        price_in_coins: isFree ? null : epPrice
       })
 
       if (error) throw error
