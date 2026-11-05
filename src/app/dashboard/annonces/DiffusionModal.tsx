@@ -2,14 +2,14 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Toast from '@/components/Toast'
 
 export default function DiffusionModal({ campaign, userId, submission }: { campaign: any, userId: string, submission?: any }) {
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<'details' | 'verify'>('details')
-  const [loading, setLoading] = useState(false)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
   
-  const [trackingId] = useState(() => submission?.tracking_id || Math.random().toString(36).substring(2, 10))
+  const [trackingId] = useState(() => Math.random().toString(36).substring(2, 10))
   const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${trackingId}` : ''
   const messageText = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 Contactez-nous ici : ${trackingUrl}`
 
@@ -18,53 +18,22 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const supabase = createClient()
   const router = useRouter()
 
-  const showToast = (msg: string) => {
-    setToast(msg)
+  const showToast = (msg: string, type: 'success' | 'error' = 'error') => {
+    setToast({ message: msg, type })
     setTimeout(() => setToast(null), 3000)
   }
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(messageText)
-    showToast('Texte copié !')
+    showToast('Texte copié !', 'success')
   }
 
-  // Étape 1 : Créer la soumission (sans preuve)
-  const handlePublish = async () => {
-    setLoading(true)
-    const { error } = await supabase.from('ad_submissions').insert({
-      campaign_id: campaign.id,
-      user_id: userId,
-      tracking_id: trackingId,
-      status: 'pending',
-      proof_type: null,
-      proof_video_url: null
-    })
-
-    if (error) {
-      if (error.code === '23505') { // Déjà existant
-        showToast('Tu as déjà publié cette annonce.')
-      } else {
-        showToast('Erreur: ' + error.message)
-      }
-      setLoading(false)
-      return
-    }
-    
-    setLoading(false)
-    setIsOpen(false)
-    showToast('Publication enregistrée !')
-    router.refresh()
-  }
-
-  // Étape 2 : Mettre à jour la soumission existante avec la vidéo
+  // On crée la soumission SEULEMENT à l'envoi de la vidéo
   const handleVerify = async () => {
-    if (!videoFile) {
-      showToast('Tu dois sélectionner une vidéo.')
-      return
-    }
+    if (!videoFile) return showToast('Sélectionne une vidéo.')
     setUploading(true)
     
-    // 1. Upload de la vidéo
+    // 1. Upload vidéo
     const fileName = `proof-${userId}-${Date.now()}.mp4`
     const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, videoFile)
     if (uploadError) {
@@ -74,11 +43,15 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     }
     const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-    // 2. Mettre à jour la soumission existante (pas de nouvelle création)
-    const { error } = await supabase.from('ad_submissions').update({
+    // 2. Créer la soumission
+    const { error } = await supabase.from('ad_submissions').insert({
+      campaign_id: campaign.id,
+      user_id: userId,
+      tracking_id: trackingId,
+      status: 'pending',
       proof_type: 'video',
       proof_video_url: publicUrl
-    }).eq('id', submission.id)
+    })
 
     if (error) {
       showToast('Erreur: ' + error.message)
@@ -96,15 +69,14 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
     setUploading(false)
     setIsOpen(false)
-    showToast('Preuve envoyée ! En attente de validation.')
-    router.refresh()
+    showToast('Preuve envoyée avec succès !', 'success')
+    setTimeout(() => router.refresh(), 1500)
   }
 
   const isDiffused = !!submission
   const hasProof = !!submission?.proof_video_url
   const isValidated = submission?.status === 'validated'
 
-  // Si validé
   if (isValidated) {
     return (
       <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex justify-center items-center gap-2">
@@ -114,7 +86,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // Si preuve déjà envoyée (en attente)
   if (isDiffused && hasProof) {
     return (
       <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex justify-center items-center gap-2">
@@ -126,22 +97,17 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
   return (
     <>
-      <button 
-        onClick={() => { setIsOpen(true); setStep(isDiffused ? 'verify' : 'details') }} 
-        className={`w-full py-2.5 text-sm font-bold rounded-xl transition ${
-          isDiffused ? 'bg-sky-50 text-sky-600 hover:bg-sky-100 border border-sky-100' : 'bg-slate-900 text-white hover:bg-slate-800'
-        }`}
-      >
-        {isDiffused ? 'Vérifier l\'annonce' : 'Diffuser cette annonce'}
+      <button onClick={() => { setIsOpen(true); setStep('details') }} className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition">
+        Diffuser cette annonce
       </button>
 
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          {toast && <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-6 py-3 rounded-full shadow-2xl text-sm font-bold z-[110]">{toast}</div>}
+          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="font-bold text-slate-900">{step === 'verify' ? 'Vérifier la publication' : 'Publier cette annonce'}</h2>
+              <h2 className="font-bold text-slate-900">{step === 'verify' ? 'Envoyer la preuve' : 'Publier cette annonce'}</h2>
               <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-900 bg-white rounded-full p-1 shadow-sm">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
@@ -163,8 +129,8 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                       Copier le texte
                     </button>
                   </div>
-                  <button onClick={handlePublish} disabled={loading} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50 transition">
-                    {loading ? 'Enregistrement...' : 'J\'ai publié sur mon statut'}
+                  <button onClick={() => setStep('verify')} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition">
+                    J'ai publié sur mon statut
                   </button>
                 </>
               )}
@@ -175,9 +141,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                     <p className="text-sm font-bold text-amber-800 mb-2">Preuve de publication</p>
                     <p className="text-xs text-amber-700 mb-3">Filme ton statut WhatsApp avec l'annonce visible et le nombre de vues.</p>
                     <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200" />
+                    {videoFile && <p className="text-xs text-emerald-600 font-bold mt-2">✅ Vidéo prête ({Math.round(videoFile.size / 1024 / 1024)} MB)</p>}
                   </div>
                   <button onClick={handleVerify} disabled={uploading || !videoFile} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 disabled:opacity-50 transition">
-                    {uploading ? 'Envoi...' : 'Envoyer ma preuve'}
+                    {uploading ? 'Envoi en cours...' : 'Envoyer ma preuve'}
                   </button>
                 </>
               )}

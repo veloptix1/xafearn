@@ -5,10 +5,18 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { EmailForm, AdminUserRow, TaskAdminSection, WithdrawalAdminSection } from './EmailComponents'
 
-async function updateCampaignStatus(formData: FormData) {
+// --- ACTIONS ADMIN ---
+async function approveCampaign(formData: FormData) {
   'use server'
   const supabase = await createClient()
-  await supabase.from('campaigns').update({ status: formData.get('status') as string }).eq('id', formData.get('id') as string)
+  await supabase.from('campaigns').update({ status: 'active' }).eq('id', formData.get('id') as string)
+  revalidatePath('/dashboard/admin')
+}
+
+async function rejectCampaign(formData: FormData) {
+  'use server'
+  const supabase = await createClient()
+  await supabase.from('campaigns').update({ status: 'rejected' }).eq('id', formData.get('id') as string)
   revalidatePath('/dashboard/admin')
 }
 
@@ -19,19 +27,20 @@ async function deleteCampaign(formData: FormData) {
   revalidatePath('/dashboard/admin')
 }
 
-async function validateSubmission(formData: FormData) {
+async function approveSubmission(formData: FormData) {
   'use server'
   const supabase = await createClient()
   const id = formData.get('id') as string
   const views = parseInt(formData.get('views') as string) || 0
+  
   if (views <= 0) return
 
   const { data: sub } = await supabase.from('ad_submissions').select('*').eq('id', id).single()
   if (!sub) return
+
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', sub.user_id).single()
-  if (!profile) return
   const { data: campaign } = await supabase.from('campaigns').select('*').eq('id', sub.campaign_id).single()
-  if (!campaign) return
+  if (!profile || !campaign) return
 
   await supabase.from('ad_submissions').update({ status: 'validated', views_count: views }).eq('id', id)
 
@@ -60,22 +69,6 @@ async function rejectSubmission(formData: FormData) {
   revalidatePath('/dashboard/admin')
 }
 
-async function approveCampaignWithOptions(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  const display_type = formData.get('display_type') as string
-  const gain_per_view = parseFloat(formData.get('gain_per_view') as string) || null
-
-  await supabase.from('campaigns').update({ 
-    status: 'active', 
-    display_type, 
-    custom_gain_per_view: gain_per_view 
-  }).eq('id', id)
-  
-  revalidatePath('/dashboard/admin')
-}
-
 async function AdminContent() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -98,14 +91,14 @@ async function AdminContent() {
   return (
     <div className="space-y-12">
       
-      {/* SECTION 1 : EMAILS GROUPÉS */}
+      {/* SECTION 1 : EMAILS */}
       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg">
         <h2 className="text-xl font-bold mb-2">📧 Communication</h2>
         <p className="text-slate-400 text-sm mb-4">Envoie un email à tes utilisateurs.</p>
         <EmailForm users={users || []} />
       </div>
 
-      {/* SECTION 2 : TÂCHES À VALIDER */}
+      {/* SECTION 2 : TÂCHES */}
       <div>
         <h2 className="text-xl font-bold text-slate-900 mb-4">🎮 Tâches à valider</h2>
         <TaskAdminSection />
@@ -117,7 +110,7 @@ async function AdminContent() {
         <WithdrawalAdminSection />
       </div>
 
-      {/* SECTION 4 : PREUVES DE DIFFUSION */}
+      {/* SECTION 4 : PREUVES */}
       <div>
         <h2 className="text-xl font-bold text-slate-900 mb-4">📸 Preuves de diffusion ({pendingSubmissions.length})</h2>
         {pendingSubmissions.length === 0 ? (
@@ -135,17 +128,15 @@ async function AdminContent() {
                   <div className="mb-3">
                     <h3 className="font-bold text-slate-900 text-sm">{camp?.title}</h3>
                     <p className="text-xs text-slate-500">{u?.full_name} ({u?.email})</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {isTest ? (
-                        <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200">TEST (Sans paiement)</span>
-                      ) : (
-                        <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">{gain.toFixed(2)} F/vue</span>
-                      )}
-                    </div>
+                    {isTest ? (
+                      <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200">TEST (Sans paiement)</span>
+                    ) : (
+                      <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">{gain.toFixed(2)} F/vue</span>
+                    )}
                   </div>
                   {s.proof_video_url && <video src={s.proof_video_url} controls className="w-full max-h-40 rounded-lg bg-black mb-3" />}
                   
-                  <form action={validateSubmission} className="flex gap-2 items-end mt-2">
+                  <form action={approveSubmission} className="flex gap-2 items-end mt-2">
                     <input type="hidden" name="id" value={s.id} />
                     <div className="flex-1">
                       <input type="number" name="views" required defaultValue={1000} className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Vues" />
@@ -176,18 +167,21 @@ async function AdminContent() {
                 <h3 className="font-bold text-sm">{c.title}</h3>
                 <p className="text-xs text-slate-500">{usersMap.get(c.user_id)?.full_name}</p>
               </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{c.status}</span>
+              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : c.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{c.status}</span>
+              
               {c.status === 'pending' && (
-                <form action={approveCampaignWithOptions} className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg">
-                  <input type="hidden" name="id" value={c.id} />
-                  <select name="display_type" className="p-1 text-xs border rounded bg-white">
-                    <option value="campaign">Catalogue</option>
-                    <option value="task">Tâche</option>
-                  </select>
-                  <input type="number" name="gain_per_view" step="0.01" placeholder="Gain/vue" className="w-16 p-1 text-xs border rounded" />
-                  <button type="submit" className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">OK</button>
-                </form>
+                <div className="flex gap-1">
+                  <form action={approveCampaign}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button type="submit" className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">Approuver</button>
+                  </form>
+                  <form action={rejectCampaign}>
+                    <input type="hidden" name="id" value={c.id} />
+                    <button type="submit" className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded">Rejeter</button>
+                  </form>
+                </div>
               )}
+              
               <form action={deleteCampaign}>
                 <input type="hidden" name="id" value={c.id} />
                 <button className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Suppr.</button>
