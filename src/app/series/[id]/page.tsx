@@ -77,6 +77,14 @@ export default function SeriesReaderPage() {
     setIsUnlocking(false)
   }
 
+  // Trouver l'index de l'épisode actuel et le suivant
+  const currentIndex = episodes.findIndex(e => e.id === activeEpisode?.id)
+  const nextEpisode = episodes[currentIndex + 1]
+  const prevEpisode = episodes[currentIndex - 1]
+  
+  // Vérifier si le prochain épisode est accessible
+  const isNextUnlocked = nextEpisode ? (nextEpisode.is_free || unlockedIds.includes(nextEpisode.id)) : false
+
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement...</div>
 
   return (
@@ -187,14 +195,14 @@ export default function SeriesReaderPage() {
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col">
           
           {/* Barre supérieure du lecteur */}
-          <div className="bg-slate-900 text-white px-4 py-4 flex justify-between items-center shadow-lg border-b border-slate-800">
+          <div className="bg-slate-900 text-white px-4 py-3 flex justify-between items-center shadow-lg border-b border-slate-800">
             <div className="flex-1 pr-4">
-              <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider mb-1">Épisode {activeEpisode.episode_number}</p>
+              <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider mb-0.5">Épisode {activeEpisode.episode_number}</p>
               <h2 className="font-bold text-sm truncate">{activeEpisode.title}</h2>
             </div>
             <button 
               onClick={() => setActiveEpisode(null)} 
-              className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl text-sm transition flex items-center gap-2"
+              className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-lg text-xs transition flex items-center gap-1.5"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               Fermer
@@ -202,11 +210,10 @@ export default function SeriesReaderPage() {
           </div>
 
           {/* Contenu de l'épisode */}
-          <div className="flex-1 overflow-y-auto flex items-center justify-center p-4">
-            <div className="w-full max-w-3xl">
-              
+          <div className="flex-1 overflow-y-auto flex flex-col items-center p-4">
+            <div className="w-full max-w-3xl flex-1 flex items-center justify-center">
               {series.content_type === 'text' && (
-                <div className="bg-white rounded-2xl p-8 md:p-12 shadow-2xl">
+                <div className="w-full bg-white rounded-2xl p-8 md:p-12 shadow-2xl my-4">
                   <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed whitespace-pre-wrap font-serif text-lg">
                     {activeEpisode.content_text}
                   </div>
@@ -214,7 +221,7 @@ export default function SeriesReaderPage() {
               )}
 
               {series.content_type === 'image' && activeEpisode.content_media_url && (
-                <img src={activeEpisode.content_media_url} className="w-full h-auto rounded-xl shadow-2xl object-contain max-h-[85vh]" alt="Épisode" />
+                <img src={activeEpisode.content_media_url} className="w-full h-auto max-h-[70vh] rounded-xl shadow-2xl object-contain" alt="Épisode" />
               )}
 
               {series.content_type === 'video' && activeEpisode.content_media_url && (
@@ -226,18 +233,57 @@ export default function SeriesReaderPage() {
                     autoPlay
                     playsInline
                     preload="metadata"
-                    className="w-full h-auto max-h-[85vh]"
+                    className="w-full h-auto max-h-[70vh]"
                   >
                     Votre navigateur ne supporte pas la vidéo.
                   </video>
                 </div>
               )}
+            </div>
 
-              {series.content_type === 'video' && !activeEpisode.content_media_url && (
-                <div className="bg-amber-50 border border-amber-200 p-8 rounded-2xl text-center">
-                  <p className="text-amber-800 font-bold text-lg mb-2">⚠️ Vidéo manquante</p>
-                  <p className="text-sm text-amber-700">Cette vidéo n'a pas pu être chargée. Veuillez contacter le créateur.</p>
-                </div>
+            {/* 🚀 BARRE DE NAVIGATION EN BAS (Précédent / Suivant) */}
+            <div className="w-full max-w-3xl mt-6 bg-slate-900 border border-slate-800 rounded-2xl p-4 flex gap-3 sticky bottom-4 shadow-xl">
+              
+              {/* Bouton Précédent */}
+              <button 
+                onClick={() => setActiveEpisode(prevEpisode)}
+                disabled={!prevEpisode}
+                className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold text-sm transition disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+                Précédent
+              </button>
+
+              {/* Bouton Suivant (Intelligent) */}
+              {nextEpisode ? (
+                isNextUnlocked ? (
+                  // Épisode suivant accessible
+                  <button 
+                    onClick={() => setActiveEpisode(nextEpisode)}
+                    className="flex-[2] py-3 px-4 bg-sky-500 hover:bg-sky-400 text-white rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(14,165,233,0.3)]"
+                  >
+                    Épisode suivant
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                  </button>
+                ) : (
+                  // Épisode suivant bloqué
+                  <button 
+                    onClick={() => handleUnlock(nextEpisode)}
+                    disabled={isUnlocking}
+                    className="flex-[2] py-3 px-4 bg-amber-500 hover:bg-amber-400 text-white rounded-xl font-bold text-sm transition flex items-center justify-center gap-2 shadow-[0_0_15px_rgba(245,158,11,0.3)] disabled:opacity-50"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
+                    Débloquer pour {nextEpisode.price_in_coins} 🪙
+                  </button>
+                )
+              ) : (
+                // Fin de la série
+                <button 
+                  disabled
+                  className="flex-[2] py-3 px-4 bg-slate-800 text-slate-500 rounded-xl font-bold text-sm cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  🎉 Fin de la série
+                </button>
               )}
             </div>
           </div>
