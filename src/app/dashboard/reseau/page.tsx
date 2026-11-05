@@ -83,8 +83,15 @@ export default function ReseauPage() {
       
       if (viralPosts && viralPosts.length > 0) {
         const formattedPosts = viralPosts.map((p: any) => ({
-          ...p,
-          profiles: { full_name: p.full_name } // On reformate pour correspondre à l'affichage
+          id: p.id,
+          user_id: p.user_id,
+          content_type: p.content_type,
+          text_content: p.text_content,
+          image_url: p.image_url,
+          total_coins_received: p.total_coins_received,
+          created_at: p.created_at,
+          comments_count: p.comments_count,
+          profiles: { full_name: p.full_name }
         }))
         
         if (pageNumber === 0) setPosts(formattedPosts)
