@@ -23,6 +23,23 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 3000)
   }
 
+  const handleDownloadImage = async () => {
+    try {
+      const response = await fetch(campaign.image_url)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download =       document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      window.URL.revokeObjectURL(url)
+      showToast('Image téléchargée !', 'success')
+    } catch (err) {
+      showToast('Erreur téléchargement.', 'error')
+    }
+  }
+
   const handleCopy = async () => {
     await navigator.clipboard.writeText(messageText)
     showToast('Texte copié !', 'success')
@@ -118,9 +135,9 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                 <>
                   <div>
                     <p className="text-sm font-bold text-slate-900 mb-2">1. Téléchargez l'image</p>
-                    <a href={campaign.image_url} download className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
+                    <button onClick={handleDownloadImage} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
                       Télécharger l'image
-                    </a>
+                    </button>
                   </div>
                   <div>
                     <p className="text-sm font-bold text-slate-900 mb-2">2. Copiez le texte</p>
