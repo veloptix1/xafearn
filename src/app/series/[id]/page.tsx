@@ -29,17 +29,22 @@ export default function SeriesReaderPage() {
     if (!s) return router.push('/dashboard')
     setSeries(s)
 
+    if (!s.is_published && (!user || s.creator_id !== user.id)) {
+      setSeries(s)
+      setEpisodes([])
+      setLoading(false)
+      return
+    }
+
     const { data: e } = await supabase.from('episodes').select('*').eq('series_id', seriesId).order('episode_number', { ascending: true })
     setEpisodes(e || [])
 
     if (user) {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(prof)
-
       const { data: unlocks } = await supabase.from('episode_unlocks').select('episode_id').eq('user_id', user.id)
       setUnlockedIds(unlocks?.map(u => u.episode_id) || [])
     }
-    
     setLoading(false)
   }
 
@@ -60,7 +65,7 @@ export default function SeriesReaderPage() {
     if (error) {
       showToast('Erreur : ' + error.message, 'error')
     } else {
-      showToast('Épisode débloqué ! Bonne lecture.', 'success')
+      showToast('Épisode débloqué !', 'success')
       setUnlockedIds(prev => [...prev, ep.id])
       setProfile({ ...profile, coins_balance: profile.coins_balance - ep.price_in_coins })
       setActiveEpisode(ep)
@@ -83,7 +88,6 @@ export default function SeriesReaderPage() {
       </header>
 
       <div className="max-w-2xl mx-auto p-4">
-        {/* Bannière de la série */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm mb-6">
           <div className="flex gap-4">
             {series.cover_url ? (
@@ -99,8 +103,7 @@ export default function SeriesReaderPage() {
           </div>
         </div>
 
-        {/* Liste des épisodes */}
-        <h2 className="font-bold text-slate-900 mb-3">Épisodes</h2>
+        <h2 className="font-bold text-slate-900 mb-3">Épisodes ({episodes.length})</h2>
         <div className="space-y-2">
           {episodes.map((ep: any) => {
             const isUnlocked = ep.is_free || unlockedIds.includes(ep.id)
@@ -133,7 +136,7 @@ export default function SeriesReaderPage() {
       {activeEpisode && (
         <div className="fixed inset-0 z-[100] bg-white overflow-y-auto">
           <div className="max-w-2xl mx-auto p-4">
-            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white py-2">
+            <div className="flex justify-between items-center mb-6 sticky top-0 bg-white py-2 z-10">
               <div>
                 <p className="text-xs text-slate-500">Épisode {activeEpisode.episode_number}</p>
                 <h2 className="font-bold text-slate-900">{activeEpisode.title}</h2>
@@ -141,30 +144,34 @@ export default function SeriesReaderPage() {
               <button onClick={() => setActiveEpisode(null)} className="px-4 py-2 bg-slate-100 text-slate-700 font-bold rounded-lg text-sm">Fermer</button>
             </div>
 
-            {/* Contenu */}
             {series.content_type === 'text' && (
               <div className="prose prose-slate max-w-none text-slate-800 leading-relaxed whitespace-pre-wrap">
                 {activeEpisode.content_text}
               </div>
             )}
+            
             {series.content_type === 'image' && activeEpisode.content_media_url && (
-              <img src={activeEpisode.content_media_url} className="w-full rounded-xl" />
+              <img src={activeEpisode.content_media_url} className="w-full rounded-xl" alt="Épisode" />
             )}
-            {series.content_type === 'video' && (
-              <div>
-                {activeEpisode.content_media_url ? (
-                  <video 
-                    src={activeEpisode.content_media_url} 
-                    controls 
-                    playsInline
-                    className="w-full rounded-xl bg-black"
-                    onError={(e) => console.error('Erreur vidéo:', activeEpisode.content_media_url)}
-                  />
-                ) : (
-                  <div className="bg-slate-100 rounded-xl p-8 text-center text-slate-500">
-                    ⚠️ Vidéo manquante. Contacte le créateur.
-                  </div>
-                )}
+            
+            {series.content_type === 'video' && activeEpisode.content_media_url && (
+              <video 
+                key={activeEpisode.content_media_url}
+                src={activeEpisode.content_media_url} 
+                controls 
+                playsInline
+                preload="metadata"
+                className="w-full rounded-xl bg-black"
+                style={{ maxHeight: '70vh' }}
+              >
+                Votre navigateur ne supporte pas la vidéo.
+              </video>
+            )}
+
+            {series.content_type === 'video' && !activeEpisode.content_media_url && (
+              <div className="bg-amber-50 border border-amber-200 p-6 rounded-xl text-center">
+                <p className="text-amber-800 font-bold">⚠️ Vidéo manquante</p>
+                <p className="text-xs text-amber-700 mt-1">Cette vidéo n'a pas pu être chargée.</p>
               </div>
             )}
           </div>

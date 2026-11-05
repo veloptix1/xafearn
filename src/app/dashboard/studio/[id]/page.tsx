@@ -120,6 +120,10 @@ export default function SeriesEditorPage() {
         
       }
 
+      // Vérifier que mediaUrl existe pour les types image/vidéo
+        throw new Error('Le fichier n'a pas été uploadé correctement.')
+      }
+
       const { error } = await supabase.from('episodes').insert({
         series_id: seriesId,
         episode_number: nextNumber,
