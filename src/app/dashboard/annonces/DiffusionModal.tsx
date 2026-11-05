@@ -27,7 +27,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 3500)
   }
 
-  // 🔍 VÉRIFICATION DU COOLDOWN : Réactivation le lendemain à 20h
+  // 🔍 VÉRIFICATION DU COOLDOWN : Réactivation le lendemain à 18h
   useEffect(() => {
     if (submission) return
 
@@ -37,10 +37,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
       const now = new Date()
       const lastProofDate = new Date(lastProof)
       
-      // Calcul de la prochaine date de disponibilité : le LENDEMAIN À 20H
+      // Calcul de la prochaine date de disponibilité : le LENDEMAIN À 18H
       const nextAvailableDate = new Date(lastProofDate)
       nextAvailableDate.setDate(nextAvailableDate.getDate() + 1) // +1 jour
-      nextAvailableDate.setHours(20, 0, 0, 0) // Fixé à 20h00
+      nextAvailableDate.setHours(18, 0, 0, 0) // Fixé à 18h00
 
       // Si on est avant cette date, on active le cooldown
       if (now.getTime() < nextAvailableDate.getTime()) {
@@ -52,12 +52,12 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
         const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
         
         if (hoursLeft > 0) {
-          setCooldownTimeLeft(`Reviens demain après 20h (dans ${hoursLeft}h ${minutesLeft}m)`)
+          setCooldownTimeLeft(`Reviens demain après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
         } else {
-          setCooldownTimeLeft(`Reviens après 20h (dans ${minutesLeft} min)`)
+          setCooldownTimeLeft(`Reviens après 18h (dans ${minutesLeft} min)`)
         }
       } else {
-        // Si la date est dépassée (il est après 20h le lendemain), on nettoie et on autorise
+        // Si la date est dépassée (il est après 18h le lendemain), on nettoie et on autorise
         localStorage.removeItem(`lastProof_${campaign.id}`)
         setIsCooldown(false)
       }
@@ -90,6 +90,25 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     } catch (err) {
       showToast('Impossible de copier le texte.', 'error')
     }
+  }
+
+  // 🚀 QUAND ON CLIQUE SUR "J'AI PUBLIÉ"
+  const handlePublishedClick = () => {
+    // 1. On active le cooldown immédiatement
+    localStorage.setItem(`lastProof_${campaign.id}`, Date.now().toString())
+    setIsCooldown(true)
+    
+    // On calcule le message de cooldown immédiat
+    const nextAvailableDate = new Date()
+    nextAvailableDate.setDate(nextAvailableDate.getDate() + 1)
+    nextAvailableDate.setHours(18, 0, 0, 0)
+    const timeDiff = nextAvailableDate.getTime() - new Date().getTime()
+    const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
+    const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
+    setCooldownTimeLeft(`Reviens demain après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
+
+    // 2. On passe à l'étape de vérification pour qu'il puisse envoyer sa preuve
+    setStep('verify')
   }
 
   const handleVerify = async () => {
@@ -130,9 +149,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
         message: `Ta preuve pour "${campaign.title}" est en cours de vérification.`,
         link: '/dashboard/annonces'
       })
-
-      // On sauvegarde l'heure EXACTE de l'envoi
-      localStorage.setItem(`lastProof_${campaign.id}`, Date.now().toString())
 
       setUploading(false)
       setIsOpen(false)
@@ -219,7 +235,8 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                       Copier le texte
                     </button>
                   </div>
-                  <button onClick={() => setStep('verify')} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition">
+                  {/* 🚀 LE BOUTON QUI DÉCLENCHE LE COOLDOWN */}
+                  <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition">
                     J'ai publié sur mon statut
                   </button>
                 </>
