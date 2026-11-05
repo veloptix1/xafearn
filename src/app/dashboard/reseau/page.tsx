@@ -9,9 +9,13 @@ export default function ReseauPage() {
   const supabase = createClient()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
-  const [activeTab, setActiveTab] = useState<'pour-toi' | 'recents' | 'top'>('pour-toi')
+  const [activeTab, setActiveTab] = useState<'pour-toi' | 'recents' | 'abonnements'>('pour-toi')
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const POSTS_PER_PAGE = 10
   
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
@@ -31,7 +35,6 @@ export default function ReseauPage() {
   const [newComment, setNewComment] = useState('')
   const [isCommenting, setIsCommenting] = useState(false)
 
-  // Gestion du menu (Modifier / Supprimer)
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingPost, setEditingPost] = useState<any>(null)
   const [editText, setEditText] = useState('')
@@ -39,35 +42,78 @@ export default function ReseauPage() {
   const [isUpdating, setIsUpdating] = useState(false)
 
   useEffect(() => {
-    loadData()
+    loadInitialData()
   }, [activeTab])
 
-  async function loadData() {
+  async function loadInitialData() {
+    setLoading(true)
+    setPage(0)
+    setHasMore(true)
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
-    // 1. Charger le profil d'abord
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
 
-    // 2. Charger les posts
+    await fetchPosts(prof, 0)
+    setLoading(false)
+  }
+
+  async function fetchPosts(prof: any, pageNumber: number) {
     let query = supabase.from('posts').select('*, profiles(full_name)')
-    if (activeTab === 'recents') query = query.order('created_at', { ascending: false })
-    else if (activeTab === 'top') query = query.order('total_coins_received', { ascending: false })
-    else query = query.order('created_at', { ascending: false })
+
+    // Filtrage selon l'onglet
+    if (activeTab === 'recents') {
+      query = query.order('created_at', { ascending: false })
+    } else if (activeTab === 'abonnements') {
+      // On récupère les IDs des personnes qu'on suit
+      const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', prof.id)
+      const followingIds = follows?.map(f => f.following_id) || []
+      
+      if (followingIds.length === 0) {
+        setPosts([])
+        setHasMore(false)
+        return
+      }
+      query = query.in('user_id', followingIds).order('created_at', { ascending: false })
+    } else {
+      query = query.order('created_at', { ascending: false })
+    }
+
+    // Pagination (on charge 10 posts à la fois)
+    const from = pageNumber * POSTS_PER_PAGE
+    const to = from + POSTS_PER_PAGE - 1
+    query = query.range(from, to)
 
     const { data: p } = await query
     
     if (p && p.length > 0) {
+      // On compte les commentaires pour chaque post
       const postsWithCounts = await Promise.all(p.map(async (post) => {
         const { count } = await supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id)
         return { ...post, comments_count: count || 0 }
       }))
-      setPosts(postsWithCounts)
+      
+      if (pageNumber === 0) {
+        setPosts(postsWithCounts)
+      } else {
+        setPosts(prev => [...prev, ...postsWithCounts])
+      }
+      
+      setHasMore(p.length === POSTS_PER_PAGE)
     } else {
-      setPosts([])
+      if (pageNumber === 0) setPosts([])
+      setHasMore(false)
     }
-    setLoading(false)
+  }
+
+  const loadMore = async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+    const nextPage = page + 1
+    setPage(nextPage)
+    await fetchPosts(profile, nextPage)
+    setLoadingMore(false)
   }
 
   const compressImage = (file: File): Promise<Blob> => {
@@ -119,7 +165,7 @@ export default function ReseauPage() {
         const fileName = `post-${profile.id}-${Date.now()}.${mediaType === 'image' ? 'jpg' : 'mp4'}`
         const { error: uploadError } = await supabase.storage.from('campaign-images').upload(fileName, blob)
         if (uploadError) throw uploadError
-        const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
+        const { data } = await supabase.storage.from('campaign-images').getPublicUrl(fileName)
         mediaUrl = data.publicUrl
       }
 
@@ -133,7 +179,7 @@ export default function ReseauPage() {
       showToast('Publication réussie !', 'success')
       setIsCreateOpen(false)
       setNewText(''); setNewMedia(null)
-      loadData()
+      loadInitialData()
     } catch (err) {
       showToast('Erreur lors de la publication.', 'error')
     }
@@ -142,13 +188,13 @@ export default function ReseauPage() {
 
   const handleSendCoins = async () => {
     if (!activePost) return
-    if ((profile.coins_balance || 0) < coinAmount) return showToast('Solde de jetons insuffisant.', 'error')
+    if ((profile.coins_balance || 0) < coinAmount) return showToast('Solde insuffisant.', 'error')
     setIsSending(true)
     try {
-      const { error: rpcError } = await supabase.rpc('send_coins', {
+      const { error } = await supabase.rpc('send_coins', {
         p_sender_id: profile.id, p_receiver_id: activePost.user_id, p_post_id: activePost.id, p_amount: coinAmount
       })
-      if (rpcError) throw rpcError
+      if (error) throw error
       
       await supabase.from('notifications').insert({
         user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
@@ -157,7 +203,10 @@ export default function ReseauPage() {
       
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
-      loadData()
+      
+      // Mettre à jour le post localement
+      setPosts(posts.map(p => p.id === activePost.id ? { ...p, total_coins_received: (p.total_coins_received || 0) + coinAmount } : p))
+      setProfile({ ...profile, coins_balance: profile.coins_balance - coinAmount })
     } catch (err: any) {
       showToast('Erreur: ' + err.message, 'error')
     }
@@ -187,7 +236,9 @@ export default function ReseauPage() {
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
-      loadData()
+      
+      // Mettre à jour le compteur localement
+      setPosts(posts.map(p => p.id === activeCommentPost.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p))
     } catch (err) { showToast('Erreur commentaire.', 'error') }
     setIsCommenting(false)
   }
@@ -195,10 +246,12 @@ export default function ReseauPage() {
   const handleDeletePost = async () => {
     if (!deletingPostId) return
     try {
-      await supabase.from('posts').delete().eq('id', deletingPostId)
+      const { error } = await supabase.from('posts').delete().eq('id', deletingPostId)
+      if (error) throw error
+      
+      setPosts(posts.filter(p => p.id !== deletingPostId))
       showToast('Publication supprimée.', 'success')
       setDeletingPostId(null)
-      loadData()
     } catch (err) { showToast('Erreur suppression.', 'error') }
   }
 
@@ -206,10 +259,12 @@ export default function ReseauPage() {
     if (!editingPost || !editText.trim()) return
     setIsUpdating(true)
     try {
-      await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
+      const { error } = await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
+      if (error) throw error
+      
+      setPosts(posts.map(p => p.id === editingPost.id ? { ...p, text_content: editText } : p))
       showToast('Publication modifiée !', 'success')
       setEditingPost(null)
-      loadData()
     } catch (err) { showToast('Erreur modification.', 'error') }
     setIsUpdating(false)
   }
@@ -224,64 +279,85 @@ export default function ReseauPage() {
         <Link href="/dashboard" className="text-white bg-white/10 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
-        <div className="flex gap-4 text-sm font-bold">
-          <button onClick={() => setActiveTab('pour-toi')} className={activeTab === 'pour-toi' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}>Pour toi</button>
-          <button onClick={() => setActiveTab('recents')} className={activeTab === 'recents' ? 'text-white border-b-2 border-white pb-1' : 'text-white/50'}>Récents</button>
+        <div className="flex gap-3 text-xs font-bold overflow-x-auto no-scrollbar">
+          <button onClick={() => setActiveTab('pour-toi')} className={activeTab === 'pour-toi' ? 'text-white border-b-2 border-white pb-1 whitespace-nowrap' : 'text-white/50 whitespace-nowrap'}>Pour toi</button>
+          <button onClick={() => setActiveTab('recents')} className={activeTab === 'recents' ? 'text-white border-b-2 border-white pb-1 whitespace-nowrap' : 'text-white/50 whitespace-nowrap'}>Récents</button>
+          <button onClick={() => setActiveTab('abonnements')} className={activeTab === 'abonnements' ? 'text-white border-b-2 border-white pb-1 whitespace-nowrap' : 'text-white/50 whitespace-nowrap'}>Abonnements</button>
         </div>
-        <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full">+ Acheter</Link>
+        <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-amber-500 text-black text-xs font-bold rounded-full shrink-0">+ Acheter</Link>
       </header>
 
       <div className="pt-16 pb-20">
-        {posts.map(post => (
-          <div key={post.id} className="mb-6 px-4">
-            <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg relative">
-              
-              <div className="flex items-center justify-between p-3">
-                <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
-                  <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
-                    {post.profiles?.full_name?.charAt(0)}
-                  </div>
-                  <p className="font-bold text-sm">@{post.profiles?.full_name}</p>
-                </Link>
+        {posts.length === 0 && !loading ? (
+          <div className="h-[70vh] flex flex-col items-center justify-center text-center px-6">
+            <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+            </div>
+            <h3 className="font-bold text-lg mb-1">Aucun post à afficher</h3>
+            <p className="text-slate-400 text-sm">
+              {activeTab === 'abonnements' ? "Abonne-toi à des créateurs pour voir leurs publications ici." : "Sois le premier à publier !"}
+            </p>
+          </div>
+        ) : (
+          posts.map(post => (
+            <div key={post.id} className="mb-6 px-4">
+              <div className="bg-slate-900 rounded-2xl overflow-hidden border border-white/10 shadow-lg relative">
+                
+                <div className="flex items-center justify-between p-3">
+                  <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
+                    <div className="w-10 h-10 bg-sky-500 rounded-full flex items-center justify-center font-bold text-white">
+                      {post.profiles?.full_name?.charAt(0)}
+                    </div>
+                    <p className="font-bold text-sm">@{post.profiles?.full_name}</p>
+                  </Link>
 
-                {/* Menu 3 points (uniquement si c'est mon post) */}
-                {post.user_id === profile?.id && (
-                  <div className="relative">
-                    <button onClick={() => setOpenMenuId(openMenuId === post.id ? null : post.id)} className="p-2 text-slate-400 hover:text-white">
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
-                    </button>
-                    {openMenuId === post.id && (
-                      <div className="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20">
-                        <button onClick={() => { setEditingPost(post); setEditText(post.text_content); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm hover:bg-white/10 rounded-t-xl border-b border-white/5">Modifier</button>
-                        <button onClick={() => { setDeletingPostId(post.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/10 rounded-b-xl">Supprimer</button>
-                      </div>
-                    )}
-                  </div>
+                  {post.user_id === profile?.id && (
+                    <div className="relative">
+                      <button onClick={() => setOpenMenuId(openMenuId === post.id ? null : post.id)} className="p-2 text-slate-400 hover:text-white">
+                        <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
+                      </button>
+                      {openMenuId === post.id && (
+                        <div className="absolute right-0 top-full mt-1 w-32 bg-slate-800 border border-white/10 rounded-xl shadow-xl z-20">
+                          <button onClick={() => { setEditingPost(post); setEditText(post.text_content); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm hover:bg-white/10 rounded-t-xl border-b border-white/5">Modifier</button>
+                          <button onClick={() => { setDeletingPostId(post.id); setOpenMenuId(null); }} className="w-full text-left px-4 py-3 text-sm text-red-400 hover:bg-white/10 rounded-b-xl">Supprimer</button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {post.content_type === 'image' && post.image_url && (
+                  <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain bg-black" />
                 )}
-              </div>
+                {post.content_type === 'video' && post.image_url && (
+                  <video src={post.image_url} controls className="w-full h-auto max-h-[60vh] bg-black" />
+                )}
 
-              {post.content_type === 'image' && post.image_url && (
-                <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain bg-black" />
-              )}
-              {post.content_type === 'video' && post.image_url && (
-                <video src={post.image_url} controls className="w-full h-auto max-h-[60vh] bg-black" />
-              )}
-
-              <div className="p-4">
-                <p className="text-sm text-slate-200 mb-4 whitespace-pre-wrap">{post.text_content}</p>
-                <div className="flex items-center justify-between border-t border-white/10 pt-3">
-                  <button onClick={() => openComments(post)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                    <span className="font-bold">{post.comments_count || 0}</span>
-                  </button>
-                  <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500/20 border border-amber-500/20">
-                    <span>🪙 {post.total_coins_received || 0}</span>
-                  </button>
+                <div className="p-4">
+                  <p className="text-sm text-slate-200 mb-4 whitespace-pre-wrap">{post.text_content}</p>
+                  <div className="flex items-center justify-between border-t border-white/10 pt-3">
+                    <button onClick={() => openComments(post)} className="flex items-center gap-1.5 text-sm text-slate-400 hover:text-white transition">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                      <span className="font-bold">{post.comments_count || 0}</span>
+                    </button>
+                    <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500/20 border border-amber-500/20">
+                      <span>🪙 {post.total_coins_received || 0}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
+          ))
+        )}
+
+        {/* Bouton Charger plus (Pagination) */}
+        {hasMore && posts.length > 0 && (
+          <div className="flex justify-center py-6">
+            <button onClick={loadMore} disabled={loadingMore} className="px-6 py-2 bg-slate-800 text-white text-sm font-bold rounded-full hover:bg-slate-700 transition disabled:opacity-50">
+              {loadingMore ? 'Chargement...' : 'Charger plus'}
+            </button>
           </div>
-        ))}
+        )}
       </div>
 
       <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50">

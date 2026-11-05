@@ -2,12 +2,15 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
+import FollowButton from './FollowButton'
 
 async function ProfileContent({ idPromise }: { idPromise: Promise<{ username: string }> }) {
   const resolvedParams = await idPromise
   const supabase = await createClient()
   
-  // On cherche l'utilisateur par son ID (qui est passé dans l'URL)
+  // On récupère l'utilisateur connecté (pour savoir si on le suit déjà)
+  const { data: { user: currentUser } } = await supabase.auth.getUser()
+
   const { data: profile } = await supabase
     .from('profiles')
     .select('*')
@@ -16,35 +19,64 @@ async function ProfileContent({ idPromise }: { idPromise: Promise<{ username: st
 
   if (!profile) return notFound()
 
-  // On récupère ses posts
   const { data: posts } = await supabase
     .from('posts')
     .select('*')
     .eq('user_id', profile.id)
     .order('created_at', { ascending: false })
 
-  // Calcul du total de jetons reçus
+  // Stats
   const totalCoins = posts?.reduce((acc, p) => acc + (p.total_coins_received || 0), 0) || 0
+  
+  const { count: followersCount } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', profile.id)
+  const { count: followingCount } = await supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', profile.id)
+
+  // Est-ce que je suis déjà ce profil ?
+  let isFollowing = false
+  if (currentUser) {
+    const { data: follow } = await supabase.from('follows').select('id').eq('follower_id', currentUser.id).eq('following_id', profile.id).maybeSingle()
+    isFollowing = !!follow
+  }
+
+  const isMyProfile = currentUser?.id === profile.id
 
   return (
     <div className="max-w-2xl mx-auto p-4 mt-4">
-      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm text-center mb-6">
-        <div className="w-24 h-24 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center text-4xl font-black mx-auto mb-4 border-4 border-white shadow-md">
+      <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm text-center mb-6 relative overflow-hidden">
+        <div className="w-24 h-24 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center text-4xl font-black mx-auto mb-4 border-4 border-white shadow-md relative z-10">
           {profile.full_name?.charAt(0)}
         </div>
-        <h1 className="text-2xl font-black text-slate-900">{profile.full_name}</h1>
-        <p className="text-sm text-slate-500 mb-4">Créateur XAFEARN</p>
+        <h1 className="text-2xl font-black text-slate-900 relative z-10">{profile.full_name}</h1>
+        <p className="text-sm text-slate-500 mb-4 relative z-10">Créateur XAFEARN</p>
         
-        <div className="flex justify-center gap-6 mb-6">
+        <div className="flex justify-center gap-6 mb-6 relative z-10">
           <div className="text-center">
-            <p className="text-2xl font-black text-slate-900">{posts?.length || 0}</p>
+            <p className="text-lg font-black text-slate-900">{posts?.length || 0}</p>
             <p className="text-xs font-bold text-slate-500 uppercase">Posts</p>
           </div>
           <div className="text-center">
-            <p className="text-2xl font-black text-amber-500">🪙 {totalCoins}</p>
-            <p className="text-xs font-bold text-slate-500 uppercase">Jetons reçus</p>
+            <p className="text-lg font-black text-slate-900">{followersCount || 0}</p>
+            <p className="text-xs font-bold text-slate-500 uppercase">Abonnés</p>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-black text-slate-900">{followingCount || 0}</p>
+            <p className="text-xs font-bold text-slate-500 uppercase">Abonnements</p>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-black text-amber-500">🪙 {totalCoins}</p>
+            <p className="text-xs font-bold text-slate-500 uppercase">Jetons</p>
           </div>
         </div>
+
+        {!isMyProfile && currentUser && (
+          <div className="relative z-10 flex justify-center">
+            <FollowButton 
+              currentUserId={currentUser.id} 
+              profileId={profile.id} 
+              initialIsFollowing={isFollowing} 
+            />
+          </div>
+        )}
       </div>
 
       <h2 className="font-bold text-slate-900 mb-4 px-1">Publications</h2>
@@ -87,7 +119,7 @@ export default function PublicProfilePage({ params }: { params: Promise<{ userna
       <Suspense fallback={
         <div className="flex flex-col items-center justify-center py-20">
           <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin mb-4"></div>
-          <p className="text-slate-500 font-medium">Chargement du profil...</p>
+          <p className="text-slate-500 font-medium">Chargement...</p>
         </div>
       }>
         <ProfileContent idPromise={params} />
