@@ -1,4 +1,5 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -22,11 +23,13 @@ export default function AdminAnnoncesPage() {
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
+    
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
-
+    
     const { data: c } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false })
     const { data: u } = await supabase.from('profiles').select('*')
+    
     setCampaigns(c || [])
     setUsers(u || [])
     setLoading(false)
@@ -40,22 +43,28 @@ export default function AdminAnnoncesPage() {
   const updateStatus = async (id: string, newStatus: string, label: string) => {
     setActionLoading(id)
     const { error } = await supabase.from('campaigns').update({ status: newStatus }).eq('id', id)
-    if (error) showToast('Erreur : ' + error.message, 'error')
-    else {
+    if (error) {
+      showToast('Erreur : ' + error.message, 'error')
+    } else {
       showToast(`Campagne ${label} avec succès !`, 'success')
-      await load()
+      setCampaigns(campaigns.map(c => c.id === id ? { ...c, status: newStatus } : c))
     }
     setActionLoading(null)
   }
 
+  // 🚀 FONCTION DE SUPPRESSION CORRIGÉE
   const deleteCampaign = async (id: string) => {
     if (!confirm('Supprimer définitivement cette campagne ?')) return
     setActionLoading(id)
+    
     const { error } = await supabase.from('campaigns').delete().eq('id', id)
-    if (error) showToast('Erreur : ' + error.message, 'error')
-    else {
+    
+    if (error) {
+      showToast('Erreur : ' + error.message, 'error')
+    } else {
       showToast('Campagne supprimée !', 'success')
-      await load()
+      // On retire la campagne de l'affichage local immédiatement
+      setCampaigns(prev => prev.filter(c => c.id !== id))
     }
     setActionLoading(null)
   }
@@ -63,14 +72,17 @@ export default function AdminAnnoncesPage() {
   const saveEdit = async () => {
     if (!editingCampaign) return
     setActionLoading(editingCampaign.id)
-    const { error } = await supabase.from('campaigns').update({ 
-      title: editTitle, description: editDescription 
+    const { error } = await supabase.from('campaigns').update({
+      title: editTitle,
+      description: editDescription
     }).eq('id', editingCampaign.id)
-    if (error) showToast('Erreur : ' + error.message, 'error')
-    else {
+    
+    if (error) {
+      showToast('Erreur : ' + error.message, 'error')
+    } else {
       showToast('Campagne modifiée !', 'success')
+      setCampaigns(campaigns.map(c => c.id === editingCampaign.id ? { ...c, title: editTitle, description: editDescription } : c))
       setEditingCampaign(null)
-      await load()
     }
     setActionLoading(null)
   }
@@ -82,23 +94,23 @@ export default function AdminAnnoncesPage() {
   return (
     <div className="space-y-4">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
+
       <h2 className="text-xl font-black text-slate-900">📢 Modération des campagnes ({campaigns.length})</h2>
-      
+
       {campaigns.length === 0 ? (
         <div className="bg-white border border-slate-200 p-8 rounded-2xl text-center text-slate-500">Aucune campagne.</div>
       ) : (
         campaigns.map((c: any) => (
-          <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4">
+          <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 hover:shadow-md transition">
             <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-              {c.image_url && <img src={c.image_url} className="w-20 h-20 object-cover rounded-xl" />}
+              {c.image_url && <img src={c.image_url} className="w-20 h-20 object-cover rounded-xl shadow-sm" alt={c.title} />}
               <div className="flex-1">
                 <h3 className="font-bold text-slate-900">{c.title}</h3>
-                <p className="text-xs text-slate-500">{usersMap.get(c.user_id)?.full_name}</p>
+                <p className="text-xs text-slate-500">Par {usersMap.get(c.user_id)?.full_name || 'Inconnu'}</p>
                 <p className="text-xs text-slate-400 mt-1">Budget : {c.budget} F • Vues : {c.views_purchased}</p>
               </div>
               <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 
+                c.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
                 c.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                 c.status === 'paused' ? 'bg-slate-100 text-slate-700' :
                 'bg-red-100 text-red-700'
@@ -129,7 +141,7 @@ export default function AdminAnnoncesPage() {
               <button onClick={() => { setEditingCampaign(c); setEditTitle(c.title); setEditDescription(c.description) }} className="px-4 py-2 bg-sky-50 text-sky-600 border border-sky-200 font-bold text-xs rounded-lg">
                 Modifier
               </button>
-              <button onClick={() => deleteCampaign(c.id)} disabled={actionLoading === c.id} className="px-4 py-2 bg-red-100 text-red-700 font-bold text-xs rounded-lg ml-auto">
+              <button onClick={() => deleteCampaign(c.id)} disabled={actionLoading === c.id} className="px-4 py-2 bg-red-100 text-red-700 font-bold text-xs rounded-lg ml-auto hover:bg-red-200 transition">
                 Supprimer
               </button>
             </div>
@@ -142,8 +154,8 @@ export default function AdminAnnoncesPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6">
             <h3 className="font-bold text-lg mb-4">Modifier la campagne</h3>
-            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3" placeholder="Titre" />
-            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 resize-none" placeholder="Description" />
+            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Titre" />
+            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Description" />
             <div className="flex gap-2">
               <button onClick={() => setEditingCampaign(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
               <button onClick={saveEdit} disabled={actionLoading === editingCampaign.id} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
