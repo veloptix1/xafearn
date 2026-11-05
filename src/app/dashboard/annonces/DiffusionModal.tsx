@@ -9,7 +9,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [step, setStep] = useState<'details' | 'verify'>('details')
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'warning' } | null>(null)
   
-  // Système de blocage (Cooldown)
+  // 🚀 ÉTATS BASÉS SUR LA BASE DE DONNÉES
   const [isCooldown, setIsCooldown] = useState(false)
   const [cooldownTimeLeft, setCooldownTimeLeft] = useState('')
 
@@ -27,42 +27,37 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 3500)
   }
 
-  // 🔍 VÉRIFICATION DU COOLDOWN : Réactivation le lendemain à 18h
+  // 🔍 VÉRIFICATION DU COOLDOWN DEPUIS LA BASE DE DONNÉES
   useEffect(() => {
-    if (submission) return
-
-    const lastProofStr = localStorage.getItem(`lastProof_${campaign.id}`)
-    if (lastProofStr) {
-      const lastProof = parseInt(lastProofStr, 10)
-      const now = new Date()
-      const lastProofDate = new Date(lastProof)
-      
-      // Calcul de la prochaine date de disponibilité : le LENDEMAIN À 18H
-      const nextAvailableDate = new Date(lastProofDate)
-      nextAvailableDate.setDate(nextAvailableDate.getDate() + 1) // +1 jour
-      nextAvailableDate.setHours(18, 0, 0, 0) // Fixé à 18h00
-
-      // Si on est avant cette date, on active le cooldown
-      if (now.getTime() < nextAvailableDate.getTime()) {
-        setIsCooldown(true)
-        
-        // Calcul du temps restant en heures et minutes
-        const timeDiff = nextAvailableDate.getTime() - now.getTime()
-        const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
-        const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
-        
-        if (hoursLeft > 0) {
-          setCooldownTimeLeft(`Reviens demain après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
-        } else {
-          setCooldownTimeLeft(`Reviens après 18h (dans ${minutesLeft} min)`)
-        }
-      } else {
-        // Si la date est dépassée (il est après 18h le lendemain), on nettoie et on autorise
-        localStorage.removeItem(`lastProof_${campaign.id}`)
-        setIsCooldown(false)
-      }
+    if (!submission || !submission.last_publish_date) {
+      setIsCooldown(false)
+      return
     }
-  }, [campaign.id, submission])
+
+    const lastPublish = new Date(submission.last_publish_date)
+    const now = new Date()
+    
+    // On calcule la prochaine date : lendemain à 18h
+    const nextAvailableDate = new Date(lastPublish)
+    nextAvailableDate.setDate(nextAvailableDate.getDate() + 1)
+    nextAvailableDate.setHours(18, 0, 0, 0)
+
+    if (now.getTime() < nextAvailableDate.getTime()) {
+      setIsCooldown(true)
+      
+      const timeDiff = nextAvailableDate.getTime() - now.getTime()
+      const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
+      const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
+      
+      setCooldownTimeLeft(
+        hoursLeft > 0 
+          ? `Reviens demain après 18h (dans ${hoursLeft}h ${minutesLeft}m)` 
+          : `Reviens après 18h (dans ${minutesLeft} min)`
+      )
+    } else {
+      setIsCooldown(false)
+    }
+  }, [submission])
 
   const handleDownloadImage = async () => {
     try {
@@ -93,21 +88,24 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   }
 
   // 🚀 QUAND ON CLIQUE SUR "J'AI PUBLIÉ"
-  const handlePublishedClick = () => {
-    // 1. On active le cooldown immédiatement
-    localStorage.setItem(`lastProof_${campaign.id}`, Date.now().toString())
-    setIsCooldown(true)
+  const handlePublishedClick = async () => {
+    // On enregistre la date dans la base de données (si la soumission existe)
+    // Sinon, on la créera à l'étape suivante
+    if (submission) {
+      await supabase.from('ad_submissions').update({ last_publish_date: new Date().toISOString() }).eq('id', submission.id)
+    }
     
-    // On calcule le message de cooldown immédiat
-    const nextAvailableDate = new Date()
+    // On bloque immédiatement le bouton
+    setIsCooldown(true)
+    const now = new Date()
+    const nextAvailableDate = new Date(now)
     nextAvailableDate.setDate(nextAvailableDate.getDate() + 1)
     nextAvailableDate.setHours(18, 0, 0, 0)
-    const timeDiff = nextAvailableDate.getTime() - new Date().getTime()
+    const timeDiff = nextAvailableDate.getTime() - now.getTime()
     const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
     const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
     setCooldownTimeLeft(`Reviens demain après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
-
-    // 2. On passe à l'étape de vérification pour qu'il puisse envoyer sa preuve
+    
     setStep('verify')
   }
 
@@ -132,13 +130,15 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
+      // 🚀 On enregistre la date de publication dans la soumission
       const { error } = await supabase.from('ad_submissions').insert({
         campaign_id: campaign.id,
         user_id: userId,
         tracking_id: trackingId,
         status: 'pending',
         proof_type: 'video',
-        proof_video_url: publicUrl
+        proof_video_url: publicUrl,
+        last_publish_date: new Date().toISOString() // La date est enregistrée ici !
       })
 
       if (error) throw new Error(error.message)
@@ -235,7 +235,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                       Copier le texte
                     </button>
                   </div>
-                  {/* 🚀 LE BOUTON QUI DÉCLENCHE LE COOLDOWN */}
                   <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition">
                     J'ai publié sur mon statut
                   </button>
