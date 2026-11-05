@@ -6,6 +6,9 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Toast from '@/components/Toast'
 
+// Liste des catégories disponibles
+const CATEGORIES = ['Romance', 'Action', 'Thriller', 'Fantastique', 'Science-Fiction', 'Drame', 'Comédie', 'Horreur', 'Aventure', 'Général']
+
 export default function StudioPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -20,6 +23,7 @@ export default function StudioPage() {
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newType, setNewType] = useState<'text' | 'image' | 'video'>('text')
+  const [newCategory, setNewCategory] = useState('Général')
   const [newCover, setNewCover] = useState<File | null>(null)
   const [isCreating, setIsCreating] = useState(false)
 
@@ -35,14 +39,11 @@ export default function StudioPage() {
     if (!prof) return router.push('/login')
     setProfile(prof)
 
-    // Récupération des séries
     const { data: seriesData } = await supabase.from('series').select('*').eq('creator_id', user.id).order('created_at', { ascending: false })
     setSeries(seriesData || [])
 
-    // Calcul des statistiques globales
     if (seriesData && seriesData.length > 0) {
       const totalEarnings = seriesData.reduce((acc, s) => acc + (s.total_earnings || 0), 0)
-      
       const seriesIds = seriesData.map(s => s.id)
       const { data: episodesData } = await supabase.from('episodes').select('id, views_count').in('series_id', seriesIds)
       
@@ -83,6 +84,7 @@ export default function StudioPage() {
         title: newTitle,
         description: newDescription,
         content_type: newType,
+        category: newCategory,
         cover_url: coverUrl,
         is_published: false
       })
@@ -91,7 +93,7 @@ export default function StudioPage() {
 
       showToast('Série créée ! Ajoute ton premier épisode.', 'success')
       setIsCreateOpen(false)
-      setNewTitle(''); setNewDescription(''); setNewCover(null); setNewType('text')
+      setNewTitle(''); setNewDescription(''); setNewCover(null); setNewType('text'); setNewCategory('Général')
       load()
     } catch (err: any) {
       showToast(err.message, 'error')
@@ -120,7 +122,6 @@ export default function StudioPage() {
 
       <div className="p-4 md:p-8 max-w-4xl mx-auto mt-4">
         
-        {/* 🚀 NOUVEAU : Tableau de bord des statistiques */}
         <div className="grid grid-cols-3 gap-3 mb-8">
           <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex flex-col items-center justify-center text-center">
             <div className="w-10 h-10 bg-sky-50 text-sky-500 rounded-full flex items-center justify-center mb-2">
@@ -202,6 +203,20 @@ export default function StudioPage() {
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* 🚀 NOUVEAU : Choix de la catégorie */}
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-2">Catégorie</p>
+                <select 
+                  value={newCategory} 
+                  onChange={e => setNewCategory(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                >
+                  {CATEGORIES.map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
               </div>
 
               <div>
