@@ -1,4 +1,5 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -34,6 +35,7 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
       <WelcomePopup />
+      
       {/* Header */}
       <header className="bg-white/80 backdrop-blur-md border-b border-slate-200 px-6 py-3 sticky top-0 z-50 flex justify-between items-center">
         <img src="/logo.png" alt="XAFEARN" className="h-7 w-auto object-contain" />
@@ -46,13 +48,36 @@ export default function DashboardPage() {
           </Link>
         </div>
       </header>
-      
+
       <div className="p-4 md:p-8 max-w-5xl mx-auto w-full mt-4">
         
         {/* VUE DIFFUSEUR */}
         {!isAnnonceurMode ? (
           <div className="space-y-4">
             
+            {/* 🚀 NOUVELLE BANNIÈRE SÉRIES (Mise en avant) */}
+            <Link href="/series" className="block relative overflow-hidden rounded-3xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 p-6 shadow-xl group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl transform translate-x-20 -translate-y-20 group-hover:scale-110 transition-transform duration-500"></div>
+              <div className="absolute bottom-0 left-0 w-40 h-40 bg-pink-500/20 rounded-full blur-2xl transform -translate-x-10 translate-y-10"></div>
+              
+              <div className="relative z-10 flex items-center justify-between">
+                <div>
+                  <span className="inline-block bg-white/20 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded-md mb-3 border border-white/20">
+                    ✨ Nouveau
+                  </span>
+                  <h2 className="text-2xl font-black text-white mb-1">Bibliothèque de Séries</h2>
+                  <p className="text-purple-100 text-sm font-medium mb-4">Découvre des histoires captivantes et gagne des jetons en lisant !</p>
+                  <div className="inline-flex items-center gap-2 bg-white text-purple-700 px-4 py-2 rounded-xl font-bold text-sm shadow-md group-hover:bg-purple-50 transition">
+                    Explorer maintenant
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 8l4 4m0 0l-4 4m4-4H3" /></svg>
+                  </div>
+                </div>
+                <div className="hidden sm:block text-6xl opacity-90 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-300">
+                  📚
+                </div>
+              </div>
+            </Link>
+
             {/* Carte Solde */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
@@ -93,12 +118,21 @@ export default function DashboardPage() {
             {/* Services */}
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1 pt-2">Services Diffuseur</h2>
             <div className="grid grid-cols-2 gap-3">
+              
               <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-sky-300 hover:shadow-md transition group">
                 <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 group-hover:bg-sky-100 transition mb-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
                 </div>
                 <h3 className="font-bold text-slate-900 text-sm">Diffuser</h3>
                 <p className="text-[10px] text-slate-500">Gérer mes annonces</p>
+              </Link>
+
+              <Link href="/dashboard/studio" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-purple-300 hover:shadow-md transition group">
+                <div className="w-10 h-10 bg-purple-50 rounded-xl flex items-center justify-center text-purple-500 group-hover:bg-purple-100 transition mb-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </div>
+                <h3 className="font-bold text-slate-900 text-sm">Mon Studio</h3>
+                <p className="text-[10px] text-slate-500">Créer des séries</p>
               </Link>
 
               <Link href="/dashboard/equipe" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm hover:border-indigo-300 hover:shadow-md transition group">
@@ -149,9 +183,11 @@ export default function DashboardPage() {
                 <h3 className="font-bold text-amber-900 text-sm">Trésors</h3>
                 <p className="text-[10px] text-amber-600">Gagne des coffres</p>
               </Link>
+
             </div>
           </div>
         ) : (
+          
           // VUE ANNONCEUR
           <div className="space-y-4">
             <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg">
