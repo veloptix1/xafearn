@@ -1,241 +1,44 @@
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { revalidatePath } from 'next/cache'
-import { EmailForm, AdminUserRow, TaskAdminSection, WithdrawalAdminSection } from './EmailComponents'
+import Link from 'next/link'
 
-// --- ACTIONS ADMIN ---
-async function approveCampaign(formData: FormData) {
-  'use server'
+export default async function AdminOverviewPage() {
   const supabase = await createClient()
-  await supabase.from('campaigns').update({ status: 'active' }).eq('id', formData.get('id') as string)
-  revalidatePath('/dashboard/admin')
-}
-
-async function rejectCampaign(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  await supabase.from('campaigns').update({ status: 'rejected' }).eq('id', formData.get('id') as string)
-  revalidatePath('/dashboard/admin')
-}
-
-async function deleteCampaign(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  await supabase.from('campaigns').delete().eq('id', formData.get('id') as string)
-  revalidatePath('/dashboard/admin')
-}
-
-async function approveSubmission(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  const id = formData.get('id') as string
-  const views = parseInt(formData.get('views') as string) || 0
   
-  if (views <= 0) return
+  const { data: campaigns } = await supabase.from('campaigns').select('*')
+  const { data: submissions } = await supabase.from('ad_submissions').select('*')
+  const { data: users } = await supabase.from('profiles').select('*')
+  const { data: withdrawals } = await supabase.from('withdrawals').select('*').eq('status', 'pending')
 
-  const { data: sub } = await supabase.from('ad_submissions').select('*').eq('id', id).single()
-  if (!sub) return
+  const pendingCampaigns = campaigns?.filter(c => c.status === 'pending').length || 0
+  const pendingSubmissions = submissions?.filter(s => s.status === 'pending').length || 0
+  const pendingWithdrawals = withdrawals?.length || 0
+  const totalUsers = users?.length || 0
 
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', sub.user_id).single()
-  const { data: campaign } = await supabase.from('campaigns').select('*').eq('id', sub.campaign_id).single()
-  if (!profile || !campaign) return
-
-  await supabase.from('ad_submissions').update({ status: 'validated', views_count: views }).eq('id', id)
-
-  if (campaign.is_welcome_campaign) {
-    await supabase.from('profiles').update({ is_test_mode: false }).eq('id', sub.user_id)
-    await supabase.from('notifications').insert({
-      user_id: sub.user_id, title: 'Mode test terminé 🚀',
-      message: 'Félicitations ! Toutes les campagnes payantes sont débloquées.', link: '/dashboard/annonces'
-    })
-  } else {
-    const gainPerView = campaign.custom_gain_per_view || (profile.level === 1 ? 0.50 : profile.level === 2 ? 1.25 : 1.75)
-    const totalGain = gainPerView * views
-    await supabase.from('profiles').update({ balance: (profile.balance || 0) + totalGain }).eq('id', sub.user_id)
-    await supabase.from('notifications').insert({
-      user_id: sub.user_id, title: 'Diffusion validée ✅',
-      message: `Tu as gagné ${totalGain.toFixed(2)} FCFA pour "${campaign.title}".`, link: '/dashboard'
-    })
-  }
-  revalidatePath('/dashboard/admin')
-}
-
-async function rejectSubmission(formData: FormData) {
-  'use server'
-  const supabase = await createClient()
-  await supabase.from('ad_submissions').update({ status: 'rejected' }).eq('id', formData.get('id') as string)
-  revalidatePath('/dashboard/admin')
-}
-
-async function AdminContent() {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-  if (!profile || (profile.role !== 'admin' && !profile.is_admin)) {
-    return <div className="text-center py-20 text-red-500 font-bold">Accès refusé</div>
-  }
-
-  const { data: campaigns } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false })
-  const { data: submissions } = await supabase.from('ad_submissions').select('*').order('created_at', { ascending: false })
-  const { data: users } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
-
-  const usersMap = new Map(users?.map(u => [u.id, u]) || [])
-  const campaignsMap = new Map(campaigns?.map(c => [c.id, c]) || [])
-
-  const pendingSubmissions = submissions?.filter(s => s.status === 'pending') || []
+  const stats = [
+    { label: 'Utilisateurs', value: totalUsers, color: 'bg-sky-500', href: '/dashboard/admin/utilisateurs' },
+    { label: 'Annonces en attente', value: pendingCampaigns, color: 'bg-amber-500', href: '/dashboard/admin/annonces' },
+    { label: 'Preuves en attente', value: pendingSubmissions, color: 'bg-purple-500', href: '/dashboard/admin/preuves' },
+    { label: 'Retraits en attente', value: pendingWithdrawals, color: 'bg-emerald-500', href: '/dashboard/admin/retraits' },
+  ]
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-6">
+      <h2 className="text-xl font-black text-slate-900">Vue d'ensemble</h2>
       
-      {/* SECTION 1 : EMAILS */}
-      <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg">
-        <h2 className="text-xl font-bold mb-2">📧 Communication</h2>
-        <p className="text-slate-400 text-sm mb-4">Envoie un email à tes utilisateurs.</p>
-        <EmailForm users={users || []} />
-      </div>
-
-      {/* SECTION 2 : TÂCHES */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">🎮 Tâches à valider</h2>
-        <TaskAdminSection />
-      </div>
-
-      {/* SECTION 3 : RETRAITS */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">💸 Retraits</h2>
-        <WithdrawalAdminSection />
-      </div>
-
-      {/* SECTION 4 : PREUVES */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">📸 Preuves de diffusion ({pendingSubmissions.length})</h2>
-        {pendingSubmissions.length === 0 ? (
-          <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">Aucune preuve en attente.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {pendingSubmissions.map((s: any) => {
-              const camp = campaignsMap.get(s.campaign_id)
-              const u = usersMap.get(s.user_id)
-              const isTest = camp?.is_welcome_campaign
-              const gain = u?.level === 1 ? 0.50 : u?.level === 2 ? 1.25 : 1.75
-              
-              return (
-                <div key={s.id} className={`bg-white border-2 rounded-2xl shadow-sm p-4 ${isTest ? 'border-purple-300' : 'border-amber-200'}`}>
-                  <div className="mb-3">
-                    <h3 className="font-bold text-slate-900 text-sm">{camp?.title}</h3>
-                    <p className="text-xs text-slate-500">{u?.full_name} ({u?.email})</p>
-                    {isTest ? (
-                      <span className="bg-purple-50 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded border border-purple-200">TEST (Sans paiement)</span>
-                    ) : (
-                      <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-0.5 rounded border border-emerald-200">{gain.toFixed(2)} F/vue</span>
-                    )}
-                  </div>
-                  {s.proof_video_url && <video src={s.proof_video_url} controls className="w-full max-h-40 rounded-lg bg-black mb-3" />}
-                  
-                  <form action={approveSubmission} className="flex gap-2 items-end mt-2">
-                    <input type="hidden" name="id" value={s.id} />
-                    <div className="flex-1">
-                      <input type="number" name="views" required defaultValue={1000} className="w-full p-2 border border-slate-300 rounded-lg text-sm" placeholder="Vues" />
-                    </div>
-                    <button type="submit" className="px-4 py-2 bg-emerald-500 text-white font-bold text-sm rounded-lg hover:bg-emerald-400">
-                      {isTest ? 'Valider test' : 'Payer'}
-                    </button>
-                  </form>
-                  <form action={rejectSubmission} className="mt-2">
-                    <input type="hidden" name="id" value={s.id} />
-                    <button type="submit" className="w-full py-1.5 bg-red-50 text-red-600 border border-red-200 font-bold text-xs rounded-lg">Rejeter</button>
-                  </form>
-                </div>
-              )
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* SECTION 5 : CAMPAGNES */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">📢 Campagnes ({campaigns?.length || 0})</h2>
-        <div className="space-y-2">
-          {campaigns?.map((c: any) => (
-            <div key={c.id} className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex gap-3 items-center">
-              {c.image_url && <img src={c.image_url} className="w-12 h-12 object-cover rounded-lg" />}
-              <div className="flex-1">
-                <h3 className="font-bold text-sm">{c.title}</h3>
-                <p className="text-xs text-slate-500">{usersMap.get(c.user_id)?.full_name}</p>
-              </div>
-              <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : c.status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'}`}>{c.status}</span>
-              
-              {c.status === 'pending' && (
-                <div className="flex gap-1">
-                  <form action={approveCampaign}>
-                    <input type="hidden" name="id" value={c.id} />
-                    <button type="submit" className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">Approuver</button>
-                  </form>
-                  <form action={rejectCampaign}>
-                    <input type="hidden" name="id" value={c.id} />
-                    <button type="submit" className="px-2 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded">Rejeter</button>
-                  </form>
-                </div>
-              )}
-              
-              <form action={deleteCampaign}>
-                <input type="hidden" name="id" value={c.id} />
-                <button className="px-2 py-1 bg-red-100 text-red-700 text-xs font-bold rounded">Suppr.</button>
-              </form>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* SECTION 6 : UTILISATEURS */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">👥 Utilisateurs ({users?.length || 0})</h2>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                <tr>
-                  <th className="px-4 py-3">Utilisateur</th>
-                  <th className="px-4 py-3">Rôle</th>
-                  <th className="px-4 py-3">Solde</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users?.map((u: any) => (
-                  <AdminUserRow key={u.id} user={u} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-    </div>
-  )
-}
-
-export default function AdminPage() {
-  return (
-    <main className="min-h-screen bg-slate-50 pb-24">
-      <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {stats.map(stat => (
+          <Link key={stat.label} href={stat.href} className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition">
+            <div className={`w-10 h-10 ${stat.color} rounded-xl mb-3`}></div>
+            <p className="text-3xl font-black text-slate-900">{stat.value}</p>
+            <p className="text-xs font-bold text-slate-500 uppercase mt-1">{stat.label}</p>
           </Link>
-          <img src="/logo.png" alt="XAFEARN" className="h-6 w-auto object-contain" />
-        </div>
-        <Link href="/dashboard/admin/annonce-test" className="px-3 py-1.5 bg-sky-500 text-white text-xs font-bold rounded-lg">Annonce test</Link>
-      </header>
-      <div className="p-4 md:p-8 max-w-5xl mx-auto mt-2">
-        <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
-          <AdminContent />
-        </Suspense>
+        ))}
       </div>
-    </main>
+
+      <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-3xl p-6 text-white shadow-lg">
+        <h3 className="font-bold text-lg mb-2">Bienvenue Admin 👋</h3>
+        <p className="text-sky-100 text-sm">Gère ta plateforme depuis les onglets en haut.</p>
+      </div>
+    </div>
   )
 }
