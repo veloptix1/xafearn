@@ -5,6 +5,18 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
+// Liste des messages qui changeront à chaque ouverture
+const TIPS = [
+  "💡 Astuce : Soutiens tes créateurs préférés en leur envoyant des jetons !",
+  "📚 Nouveau : Découvre la bibliothèque de séries et gagne des récompenses.",
+  "🚀 Deviens créateur dans le Studio et monétise tes histoires.",
+  "🪙 Plus tu reçois de jetons, plus tu montes dans le classement des tendances !",
+  "🔥 N'oublie pas de commenter les publications qui te plaisent.",
+  "🎯 Publie du contenu de qualité pour attirer plus d'abonnés.",
+  "🌟 Le bouton '+ Jetons' te permet de recharger ton solde facilement.",
+  "📢 Partage tes publications sur tes réseaux pour gagner plus de visibilité.",
+]
+
 export default function ReseauPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -20,8 +32,24 @@ export default function ReseauPage() {
   const [hasMore, setHasMore] = useState(true)
   const POSTS_PER_PAGE = 10
 
-  // Système de Toast unifié
+  // Système de Toast
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
+  
+  // 🚀 NOUVEAU : Toast d'astuce qui s'affiche à l'ouverture
+  useEffect(() => {
+    // On choisit un message au hasard
+    const randomTip = TIPS[Math.floor(Math.random() * TIPS.length)]
+    
+    // On affiche le toast après 1 seconde (pour laisser le temps à la page de charger)
+    const timer = setTimeout(() => {
+      setToast({ message: randomTip, type: 'info' })
+      // Il disparaît au bout de 5 secondes
+      setTimeout(() => setToast(null), 5000)
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [])
+
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
     setToast({ message, type })
     setTimeout(() => setToast(null), 3000)
@@ -64,7 +92,6 @@ export default function ReseauPage() {
     if (!prof) return router.push('/login')
     setProfile(prof)
 
-    // Récupération des tendances (Top créateurs)
     const { data: topPosts } = await supabase.from('posts').select('user_id, total_coins_received, profiles(full_name)').order('total_coins_received', { ascending: false }).limit(20)
     const uniqueCreators = new Map()
     topPosts?.forEach(p => {
@@ -346,14 +373,18 @@ export default function ReseauPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-purple-50 relative pb-20">
-      {/* Toast personnalisé */}
+      {/* 🚀 TOAST AMÉLIORÉ (avec icône) */}
       {toast && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white animate-slide-down ${
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white flex items-center gap-2 animate-in slide-in-from-top-4 duration-300 ${
           toast.type === 'success' ? 'bg-emerald-500' : 
           toast.type === 'error' ? 'bg-red-500' : 
-          toast.type === 'warning' ? 'bg-amber-500' : 'bg-sky-500'
+          toast.type === 'warning' ? 'bg-amber-500' : 'bg-slate-800 border border-slate-700'
         }`}>
-          {toast.message}
+          {toast.type === 'info' && <span className="text-lg">💡</span>}
+          <span className="max-w-[250px] leading-tight">{toast.message}</span>
+          <button onClick={() => setToast(null)} className="ml-2 opacity-70 hover:opacity-100">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+          </button>
         </div>
       )}
 
@@ -377,7 +408,6 @@ export default function ReseauPage() {
       </header>
 
       <div className="pt-4">
-        {/* Tendances */}
         {trending.length > 0 && (
           <div className="px-4 py-3 mb-2 overflow-x-auto no-scrollbar">
             <div className="flex gap-4">
@@ -486,12 +516,10 @@ export default function ReseauPage() {
         )}
       </div>
 
-      {/* Bouton flottant de création */}
       <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-gradient-to-tr from-sky-400 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 active:scale-90 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* Modal Création */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -517,7 +545,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Modification */}
       {editingPost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -533,7 +560,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Suppression */}
       {deletingPostId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900 shadow-2xl">
@@ -550,7 +576,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Soutien (Jetons) */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900 shadow-2xl">
@@ -573,7 +598,6 @@ export default function ReseauPage() {
         </div>
       )}
 
-      {/* Modal Commentaires */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
           <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
