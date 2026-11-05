@@ -28,36 +28,24 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     showToast('Texte copié !')
   }
 
-  const handleDownload = async () => {
-    try {
-      const response = await fetch(campaign.image_url)
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const link = document.createElement('a')
-      link.href = url
-      link.download = `annonce-${campaign.id}.jpg`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      window.URL.revokeObjectURL(url)
-      showToast('Image téléchargée !')
-    } catch (err) {
-      showToast('Erreur lors du téléchargement.')
-    }
-  }
-
-  // Étape 1 : L'utilisateur a publié, on crée une soumission "pending" SANS preuve
+  // Étape 1 : Créer la soumission (sans preuve)
   const handlePublish = async () => {
     setLoading(true)
     const { error } = await supabase.from('ad_submissions').insert({
       campaign_id: campaign.id,
       user_id: userId,
       tracking_id: trackingId,
-      status: 'pending'
+      status: 'pending',
+      proof_type: null,
+      proof_video_url: null
     })
 
     if (error) {
-      showToast('Erreur: ' + error.message)
+      if (error.code === '23505') { // Déjà existant
+        showToast('Tu as déjà publié cette annonce.')
+      } else {
+        showToast('Erreur: ' + error.message)
+      }
       setLoading(false)
       return
     }
@@ -68,7 +56,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     router.refresh()
   }
 
-  // Étape 2 : L'utilisateur envoie sa preuve vidéo
+  // Étape 2 : Mettre à jour la soumission existante avec la vidéo
   const handleVerify = async () => {
     if (!videoFile) {
       showToast('Tu dois sélectionner une vidéo.')
@@ -86,7 +74,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     }
     const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-    // 2. Mettre à jour la soumission avec la preuve
+    // 2. Mettre à jour la soumission existante (pas de nouvelle création)
     const { error } = await supabase.from('ad_submissions').update({
       proof_type: 'video',
       proof_video_url: publicUrl
@@ -98,7 +86,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
       return
     }
 
-    // 3. Créer la notification
+    // 3. Notification
     await supabase.from('notifications').insert({
       user_id: userId,
       title: 'Preuve envoyée ⏳',
@@ -113,10 +101,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   }
 
   const isDiffused = !!submission
-  const isPending = submission?.status === 'pending'
-  const isValidated = submission?.status === 'validated'
   const hasProof = !!submission?.proof_video_url
+  const isValidated = submission?.status === 'validated'
 
+  // Si validé
   if (isValidated) {
     return (
       <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex justify-center items-center gap-2">
@@ -126,8 +114,8 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // Si la soumission est en attente ET qu'il y a déjà une preuve, on affiche le statut
-  if (isPending && hasProof) {
+  // Si preuve déjà envoyée (en attente)
+  if (isDiffused && hasProof) {
     return (
       <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex justify-center items-center gap-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -160,55 +148,39 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
             </div>
 
             <div className="p-5 overflow-y-auto space-y-5">
-              
-              {/* ETAPE 1 : COPIER LE TEXTE ET L'IMAGE */}
               {step === 'details' && (
                 <>
                   <div>
                     <p className="text-sm font-bold text-slate-900 mb-2">1. Téléchargez l'image</p>
-                    <button onClick={handleDownload} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                    <a href={campaign.image_url} download className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition flex justify-center items-center gap-2">
                       Télécharger l'image
-                    </button>
+                    </a>
                   </div>
-
                   <div>
                     <p className="text-sm font-bold text-slate-900 mb-2">2. Copiez le texte</p>
-                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
-                      {messageText}
-                    </div>
-                    <button onClick={handleCopy} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl hover:bg-sky-100 transition flex justify-center items-center gap-2">
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">{messageText}</div>
+                    <button onClick={handleCopy} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl hover:bg-sky-100 transition">
                       Copier le texte
                     </button>
                   </div>
-
-                  <button onClick={handlePublish} disabled={loading} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50 transition shadow-md">
+                  <button onClick={handlePublish} disabled={loading} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 disabled:opacity-50 transition">
                     {loading ? 'Enregistrement...' : 'J\'ai publié sur mon statut'}
                   </button>
                 </>
               )}
 
-              {/* ETAPE 2 : UPLOADER LA PREUVE VIDÉO */}
               {step === 'verify' && (
                 <>
                   <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
                     <p className="text-sm font-bold text-amber-800 mb-2">Preuve de publication</p>
-                    <p className="text-xs text-amber-700 mb-3">Filme ton statut WhatsApp avec l'annonce visible et le nombre de vues pour valider tes gains.</p>
-                    <input 
-                      type="file" 
-                      accept="video/*" 
-                      onChange={(e) => setVideoFile(e.target.files?.[0] || null)} 
-                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200" 
-                    />
+                    <p className="text-xs text-amber-700 mb-3">Filme ton statut WhatsApp avec l'annonce visible et le nombre de vues.</p>
+                    <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200" />
                   </div>
-
-                  <button onClick={handleVerify} disabled={uploading || !videoFile} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 disabled:opacity-50 transition shadow-md">
-                    {uploading ? 'Envoi en cours...' : 'Envoyer ma preuve'}
+                  <button onClick={handleVerify} disabled={uploading || !videoFile} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 disabled:opacity-50 transition">
+                    {uploading ? 'Envoi...' : 'Envoyer ma preuve'}
                   </button>
                 </>
               )}
-
             </div>
           </div>
         </div>
