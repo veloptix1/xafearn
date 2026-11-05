@@ -1,14 +1,18 @@
 'use client'
-import { useState } from 'react'
+
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import Toast from '@/components/Toast'
 
 export default function DiffusionModal({ campaign, userId, submission }: { campaign: any, userId: string, submission?: any }) {
   const [isOpen, setIsOpen] = useState(false)
   const [step, setStep] = useState<'details' | 'verify'>('details')
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'warning' } | null>(null)
   
+  // Système de blocage (Cooldown)
+  const [isCooldown, setIsCooldown] = useState(false)
+  const [cooldownTimeLeft, setCooldownTimeLeft] = useState('')
+
   const [trackingId] = useState(() => Math.random().toString(36).substring(2, 10))
   const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${trackingId}` : ''
   const messageText = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 Contactez-nous ici : ${trackingUrl}`
@@ -18,19 +22,57 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const supabase = createClient()
   const router = useRouter()
 
-  const showToast = (msg: string, type: 'success' | 'error' = 'error') => {
+  const showToast = (msg: string, type: 'success' | 'error' | 'warning' = 'error') => {
     setToast({ message: msg, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(() => setToast(null), 3500)
   }
+
+  // 🔍 VÉRIFICATION DU COOLDOWN AU CHARGEMENT
+  useEffect(() => {
+    // Si on a déjà une soumission en cours, le cooldown ne s'applique pas
+    if (submission) return
+
+    // On cherche une preuve récente (dans localStorage)
+    const lastProofStr = localStorage.getItem(`lastProof_${campaign.id}`)
+    if (lastProofStr) {
+      const lastProof = parseInt(lastProofStr, 10)
+      const now = new Date()
+      const lastProofDate = new Date(lastProof)
+      
+      // Calcul de la différence en heures
+      const diffHours = (now.getTime() - lastProof.getTime()) / (1000 * 60 * 60)
+      
+      // Si le dernier envoi a moins de 24h
+      if (diffHours < 24) {
+        setIsCooldown(true)
+        
+        // On calcule quand est le prochain 20h
+        const nextAvailable = new Date(lastProofDate)
+        nextAvailable.setDate(nextAvailable.getDate() + 1)
+        nextAvailable.setHours(20, 0, 0, 0)
+        
+        // Si la date calculée est dans le passé (ex: il est 21h aujourd'hui), on décale d'un jour
+        if (nextAvailable.getTime() < now.getTime()) {
+          nextAvailable.setDate(nextAvailable.getDate() + 1)
+        }
+        
+        const timeUntilNext = nextAvailable.getTime() - now.getTime()
+        const hoursLeft = Math.ceil(timeUntilNext / (1000 * 60 * 60))
+        setCooldownTimeLeft(`Reviens demain après 20h (dans ${hoursLeft}h)`)
+      }
+    }
+  }, [campaign.id, submission])
 
   const handleDownloadImage = async () => {
     try {
+      if (!campaign.image_url) return showToast("Pas d'image à télécharger.", 'warning')
       const response = await fetch(campaign.image_url)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement('a')
       link.href = url
-      link.download =       document.body.appendChild(link)
+      link.download = `annonce-${campaign.id}.jpg`
+      document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
       window.URL.revokeObjectURL(url)
@@ -41,53 +83,68 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   }
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(messageText)
-    showToast('Texte copié !', 'success')
+    try {
+      await navigator.clipboard.writeText(messageText)
+      showToast('Texte copié !', 'success')
+    } catch (err) {
+      showToast('Impossible de copier le texte.', 'error')
+    }
   }
 
-  // On crée la soumission SEULEMENT à l'envoi de la vidéo
   const handleVerify = async () => {
-    if (!videoFile) return showToast('Sélectionne une vidéo.')
-    setUploading(true)
+    if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
     
-    // 1. Upload vidéo
-    const fileName = `proof-${userId}-${Date.now()}.mp4`
-    const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, videoFile)
-    if (uploadError) {
-      showToast('Erreur upload vidéo.')
-      setUploading(false)
-      return
-    }
-    const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
-
-    // 2. Créer la soumission
-    const { error } = await supabase.from('ad_submissions').insert({
-      campaign_id: campaign.id,
-      user_id: userId,
-      tracking_id: trackingId,
-      status: 'pending',
-      proof_type: 'video',
-      proof_video_url: publicUrl
-    })
-
-    if (error) {
-      showToast('Erreur: ' + error.message)
-      setUploading(false)
-      return
+    // 🔒 SÉCURITÉ : Vérification de la taille (Max 50 MB)
+    if (videoFile.size > 50 * 1024 * 1024) {
+      return showToast('La vidéo ne doit pas dépasser 50 MB.', 'error')
     }
 
-    // 3. Notification
-    await supabase.from('notifications').insert({
-      user_id: userId,
-      title: 'Preuve envoyée ⏳',
-      message: `Ta preuve pour "${campaign.title}" est en cours de vérification.`,
-      link: '/dashboard/annonces'
-    })
+    // 🔒 SÉCURITÉ : Vérification du type MIME
+    if (!videoFile.type.startsWith('video/')) {
+      return showToast('Le fichier doit être une vidéo.', 'error')
+    }
 
-    setUploading(false)
-    setIsOpen(false)
-    showToast('Preuve envoyée avec succès !', 'success')
-    setTimeout(() => router.refresh(), 1500)
+    setUploading(true)
+
+    try {
+      const fileName = `proof-${userId}-${Date.now()}.mp4`
+      const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, videoFile)
+      
+      if (uploadError) throw new Error(uploadError.message)
+
+      const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
+
+      const { error } = await supabase.from('ad_submissions').insert({
+        campaign_id: campaign.id,
+        user_id: userId,
+        tracking_id: trackingId,
+        status: 'pending',
+        proof_type: 'video',
+        proof_video_url: publicUrl
+      })
+
+      if (error) throw new Error(error.message)
+
+      // 3. Notification
+      await supabase.from('notifications').insert({
+        user_id: userId, 
+        title: 'Preuve envoyée ⏳',
+        message: `Ta preuve pour "${campaign.title}" est en cours de vérification.`,
+        link: '/dashboard/annonces'
+      })
+
+      // 4. Activation du Cooldown (On sauvegarde l'heure actuelle dans le navigateur)
+      localStorage.setItem(`lastProof_${campaign.id}`, Date.now().toString())
+
+      setUploading(false)
+      setIsOpen(false)
+      showToast('Preuve envoyée avec succès !', 'success')
+      setTimeout(() => router.refresh(), 1500)
+
+    } catch (err: any) {
+      showToast('Erreur : ' + err.message, 'error')
+      setUploading(false)
+    }
   }
 
   const isDiffused = !!submission
@@ -112,6 +169,16 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
+  // ⏳ SI LE COOLDOWN EST ACTIF, ON AFFICHE LE MESSAGE
+  if (isCooldown) {
+    return (
+      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-100 text-slate-400 border border-slate-200 flex justify-center items-center gap-2 cursor-not-allowed">
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+        {cooldownTimeLeft || 'Reviens demain après 20h'}
+      </div>
+    )
+  }
+
   return (
     <>
       <button onClick={() => { setIsOpen(true); setStep('details') }} className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition">
@@ -120,8 +187,17 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
           
+          {/* Toast Local */}
+          {toast && (
+            <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white ${
+              toast.type === 'success' ? 'bg-emerald-500' : 
+              toast.type === 'error' ? 'bg-red-500' : 'bg-amber-500'
+            }`}>
+              {toast.message}
+            </div>
+          )}
+
           <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
             <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
               <h2 className="font-bold text-slate-900">{step === 'verify' ? 'Envoyer la preuve' : 'Publier cette annonce'}</h2>
