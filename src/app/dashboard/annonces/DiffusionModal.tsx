@@ -27,38 +27,39 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 3500)
   }
 
-  // 🔍 VÉRIFICATION DU COOLDOWN AU CHARGEMENT
+  // 🔍 VÉRIFICATION DU COOLDOWN : Réactivation le lendemain à 20h
   useEffect(() => {
-    // Si on a déjà une soumission en cours, le cooldown ne s'applique pas
     if (submission) return
 
-    // On cherche une preuve récente (dans localStorage)
     const lastProofStr = localStorage.getItem(`lastProof_${campaign.id}`)
     if (lastProofStr) {
       const lastProof = parseInt(lastProofStr, 10)
       const now = new Date()
       const lastProofDate = new Date(lastProof)
       
-      // Calcul de la différence en heures
-      const diffHours = (now.getTime() - lastProof.getTime()) / (1000 * 60 * 60)
-      
-      // Si le dernier envoi a moins de 24h
-      if (diffHours < 24) {
+      // Calcul de la prochaine date de disponibilité : le LENDEMAIN À 20H
+      const nextAvailableDate = new Date(lastProofDate)
+      nextAvailableDate.setDate(nextAvailableDate.getDate() + 1) // +1 jour
+      nextAvailableDate.setHours(20, 0, 0, 0) // Fixé à 20h00
+
+      // Si on est avant cette date, on active le cooldown
+      if (now.getTime() < nextAvailableDate.getTime()) {
         setIsCooldown(true)
         
-        // On calcule quand est le prochain 20h
-        const nextAvailable = new Date(lastProofDate)
-        nextAvailable.setDate(nextAvailable.getDate() + 1)
-        nextAvailable.setHours(20, 0, 0, 0)
+        // Calcul du temps restant en heures et minutes
+        const timeDiff = nextAvailableDate.getTime() - now.getTime()
+        const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
+        const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
         
-        // Si la date calculée est dans le passé (ex: il est 21h aujourd'hui), on décale d'un jour
-        if (nextAvailable.getTime() < now.getTime()) {
-          nextAvailable.setDate(nextAvailable.getDate() + 1)
+        if (hoursLeft > 0) {
+          setCooldownTimeLeft(`Reviens demain après 20h (dans ${hoursLeft}h ${minutesLeft}m)`)
+        } else {
+          setCooldownTimeLeft(`Reviens après 20h (dans ${minutesLeft} min)`)
         }
-        
-        const timeUntilNext = nextAvailable.getTime() - now.getTime()
-        const hoursLeft = Math.ceil(timeUntilNext / (1000 * 60 * 60))
-        setCooldownTimeLeft(`Reviens demain après 20h (dans ${hoursLeft}h)`)
+      } else {
+        // Si la date est dépassée (il est après 20h le lendemain), on nettoie et on autorise
+        localStorage.removeItem(`lastProof_${campaign.id}`)
+        setIsCooldown(false)
       }
     }
   }, [campaign.id, submission])
@@ -94,12 +95,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const handleVerify = async () => {
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
     
-    // 🔒 SÉCURITÉ : Vérification de la taille (Max 50 MB)
     if (videoFile.size > 50 * 1024 * 1024) {
       return showToast('La vidéo ne doit pas dépasser 50 MB.', 'error')
     }
 
-    // 🔒 SÉCURITÉ : Vérification du type MIME
     if (!videoFile.type.startsWith('video/')) {
       return showToast('Le fichier doit être une vidéo.', 'error')
     }
@@ -125,7 +124,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       if (error) throw new Error(error.message)
 
-      // 3. Notification
       await supabase.from('notifications').insert({
         user_id: userId, 
         title: 'Preuve envoyée ⏳',
@@ -133,7 +131,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
         link: '/dashboard/annonces'
       })
 
-      // 4. Activation du Cooldown (On sauvegarde l'heure actuelle dans le navigateur)
+      // On sauvegarde l'heure EXACTE de l'envoi
       localStorage.setItem(`lastProof_${campaign.id}`, Date.now().toString())
 
       setUploading(false)
@@ -169,12 +167,12 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // ⏳ SI LE COOLDOWN EST ACTIF, ON AFFICHE LE MESSAGE
+  // ⏳ BOUTON DÉSACTIVÉ PENDANT LE COOLDOWN
   if (isCooldown) {
     return (
-      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-100 text-slate-400 border border-slate-200 flex justify-center items-center gap-2 cursor-not-allowed">
+      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-100 text-slate-500 border border-slate-200 flex justify-center items-center gap-2 cursor-not-allowed">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        {cooldownTimeLeft || 'Reviens demain après 20h'}
+        {cooldownTimeLeft}
       </div>
     )
   }
@@ -188,7 +186,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           
-          {/* Toast Local */}
           {toast && (
             <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white ${
               toast.type === 'success' ? 'bg-emerald-500' : 
