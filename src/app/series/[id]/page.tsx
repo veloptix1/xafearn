@@ -22,6 +22,10 @@ export default function SeriesReaderPage() {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [isVideoEnded, setIsVideoEnded] = useState(false)
+  
+  // 🚀 État pour les favoris
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [isTogglingFav, setIsTogglingFav] = useState(false)
 
   useEffect(() => {
     load()
@@ -48,6 +52,10 @@ export default function SeriesReaderPage() {
       setProfile(prof)
       const { data: unlocks } = await supabase.from('episode_unlocks').select('episode_id').eq('user_id', user.id)
       setUnlockedIds(unlocks?.map(u => u.episode_id) || [])
+
+      // 🚀 On vérifie si la série est en favori
+      const { data: fav } = await supabase.from('series_favorites').select('id').eq('user_id', user.id).eq('series_id', seriesId).maybeSingle()
+      setIsFavorite(!!fav)
     }
     setLoading(false)
   }
@@ -55,6 +63,28 @@ export default function SeriesReaderPage() {
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => {
     setToast({ message: msg, type })
     setTimeout(() => setToast(null), 3000)
+  }
+
+  // 🚀 Fonction pour ajouter/retirer des favoris
+  const toggleFavorite = async () => {
+    if (!profile) return router.push('/login')
+    setIsTogglingFav(true)
+    
+    try {
+      if (isFavorite) {
+        await supabase.from('series_favorites').delete().eq('user_id', profile.id).eq('series_id', seriesId)
+        setIsFavorite(false)
+        showToast('Retiré de tes favoris.', 'success')
+      } else {
+        await supabase.from('series_favorites').insert({ user_id: profile.id, series_id: seriesId })
+        setIsFavorite(true)
+        showToast('Ajouté à tes favoris !', 'success')
+      }
+    } catch (err) {
+      showToast('Erreur lors de l\'opération.', 'error')
+    } finally {
+      setIsTogglingFav(false)
+    }
   }
 
   const handleUnlock = async (ep: any) => {
@@ -78,23 +108,14 @@ export default function SeriesReaderPage() {
     setIsUnlocking(false)
   }
 
-  // 🚀 NOUVELLE FONCTION : On compte la vue à l'ouverture de l'épisode
   const playEpisode = async (ep: any) => {
     setActiveEpisode(ep)
     setIsVideoEnded(false)
-    
-    // On incrémente les vues en base de données (en arrière-plan)
     try {
-      await supabase.rpc('increment_episode_views', { 
-        p_episode_id: ep.id, 
-        p_series_id: seriesId 
-      })
-    } catch (err) {
-      console.log("Erreur comptage vue:", err)
-    }
+      await supabase.rpc('increment_episode_views', { p_episode_id: ep.id, p_series_id: seriesId })
+    } catch (err) {}
   }
 
-  // Navigation
   const currentIndex = episodes.findIndex(e => e.id === activeEpisode?.id)
   const nextEpisode = episodes[currentIndex + 1]
   const prevEpisode = episodes[currentIndex - 1]
@@ -134,8 +155,24 @@ export default function SeriesReaderPage() {
               </p>
             </div>
           </div>
-          <div className="mt-5 pt-4 border-t border-slate-100 relative z-10">
-            <p className="text-sm text-slate-600 leading-relaxed line-clamp-4">{series.description}</p>
+          
+          <div className="mt-5 pt-4 border-t border-slate-100 relative z-10 flex items-start gap-4">
+            <p className="text-sm text-slate-600 leading-relaxed line-clamp-4 flex-1">{series.description}</p>
+            
+            {/* 🚀 BOUTON FAVORI */}
+            {profile && (
+              <button 
+                onClick={toggleFavorite}
+                disabled={isTogglingFav}
+                className={`shrink-0 w-12 h-12 rounded-full flex items-center justify-center transition-all ${
+                  isFavorite ? 'bg-rose-50 text-rose-500 shadow-inner' : 'bg-slate-50 text-slate-400 hover:bg-rose-50 hover:text-rose-400'
+                }`}
+              >
+                <svg className="w-6 h-6" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                </svg>
+              </button>
+            )}
           </div>
         </div>
 
