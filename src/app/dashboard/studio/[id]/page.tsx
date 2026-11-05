@@ -84,6 +84,34 @@ export default function SeriesEditorPage() {
     }
   }
 
+  // 🚀 FONCTION D'UPLOAD CLOUDINARY
+  const uploadToCloudinary = async (file: File) => {
+    const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+    const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
+
+    if (!cloudName || !uploadPreset) {
+      throw new Error('Configuration Cloudinary manquante. Vérifie .env.local et Vercel.')
+    }
+
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('upload_preset', uploadPreset)
+    formData.append('folder', 'xafearn')
+
+    const response = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/video/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+
+    if (!response.ok) {
+      const errData = await response.json()
+      throw new Error('Erreur Cloudinary : ' + (errData.error?.message || 'Inconnu'))
+    }
+
+    const data = await response.json()
+    return data.secure_url
+  }
+
   const handleAddEpisode = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsUploading(true)
@@ -101,6 +129,7 @@ export default function SeriesEditorPage() {
       let mediaUrl = null
 
       if (series.content_type !== 'text' && epMedia) {
+        // Vérification de la durée (2 min max)
         if (series.content_type === 'video') {
           await new Promise((resolve, reject) => {
             const video = document.createElement('video')
@@ -118,21 +147,28 @@ export default function SeriesEditorPage() {
           })
         }
 
-        const ext = epMedia.name.split('.').pop() || (series.content_type === 'video' ? 'mp4' : 'jpg')
-        const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
-        
-        const { error: upErr } = await supabase.storage
-          .from('campaign-images')
-          .upload(fileName, epMedia, { contentType: epMedia.type })
+        if (series.content_type === 'video') {
+          // 🚀 UTILISATION DE CLOUDINARY
+          showToast('Compression et envoi de la vidéo...', 'success')
+          mediaUrl = await uploadToCloudinary(epMedia)
+        } else {
+          // Pour les images, on garde Supabase
+          const ext = epMedia.name.split('.').pop() || 'jpg'
+          const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
+          
+          const { error: upErr } = await supabase.storage
+            .from('campaign-images')
+            .upload(fileName, epMedia, { contentType: epMedia.type })
 
-        if (upErr) throw new Error('Upload échoué : ' + upErr.message)
+          if (upErr) throw new Error('Upload image échoué : ' + upErr.message)
 
-        const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
-        mediaUrl = data.publicUrl
+          const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
+          mediaUrl = data.publicUrl
+        }
       }
 
       if (series.content_type !== 'text' && !mediaUrl) {
-        throw new Error('Le fichier n\'a pas été uploadé correctement. Réessayez.')
+        throw new Error('Le fichier n\'a pas été uploadé correctement.')
       }
 
       const { error } = await supabase.from('episodes').insert({
@@ -142,7 +178,6 @@ export default function SeriesEditorPage() {
         content_text: series.content_type === 'text' ? epText : null,
         content_media_url: mediaUrl,
         is_free: isFree,
-        // ✅ CORRECTION ICI : On envoie null au lieu de 0 pour les gratuits
         price_in_coins: isFree ? null : epPrice
       })
 
@@ -279,10 +314,16 @@ export default function SeriesEditorPage() {
               ) : (
                 <div>
                   <div className="border-2 border-dashed border-slate-200 hover:border-sky-400 rounded-xl p-4 text-center transition">
-                    <input type="file" required accept={series.content_type === 'video' ? 'video/*' : 'image/*'} onChange={e => setEpMedia(e.target.files?.[0] || null)} className="w-full text-xs text-slate-500" />
+                    <input 
+                      type="file" 
+                      required
+                      accept={series.content_type === 'video' ? 'video/*' : 'image/*'} 
+                      onChange={e => setEpMedia(e.target.files?.[0] || null)} 
+                      className="w-full text-xs text-slate-500" 
+                    />
                   </div>
                   {series.content_type === 'video' && (
-                    <p className="text-xs text-amber-600 mt-2 font-medium">⚠️ La vidéo ne doit pas dépasser 2 minutes.</p>
+                    <p className="text-xs text-emerald-600 mt-2 font-medium">🚀 Compression automatique via Cloudinary (Max 2 min).</p>
                   )}
                 </div>
               )}
