@@ -1,13 +1,15 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import Toast from '@/components/Toast'
 
 export default function ReseauPage() {
   const supabase = createClient()
   const router = useRouter()
+  
+  // États principaux
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [profile, setProfile] = useState<any>(null)
@@ -17,25 +19,29 @@ export default function ReseauPage() {
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
   const POSTS_PER_PAGE = 10
-  
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
-  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
 
+  // Système de Toast unifié
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
+  const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setToast({ message, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  // États de création de post
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newText, setNewText] = useState('')
   const [newMedia, setNewMedia] = useState<File | null>(null)
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image')
   const [isUploading, setIsUploading] = useState(false)
 
+  // États d'interaction
   const [activePost, setActivePost] = useState<any>(null)
   const [coinAmount, setCoinAmount] = useState(10)
   const [isSending, setIsSending] = useState(false)
-
   const [activeCommentPost, setActiveCommentPost] = useState<any>(null)
   const [comments, setComments] = useState<any[]>([])
   const [newComment, setNewComment] = useState('')
   const [isCommenting, setIsCommenting] = useState(false)
-
   const [openMenuId, setOpenMenuId] = useState<string | null>(null)
   const [editingPost, setEditingPost] = useState<any>(null)
   const [editText, setEditText] = useState('')
@@ -50,12 +56,15 @@ export default function ReseauPage() {
     setLoading(true)
     setPage(0)
     setHasMore(true)
+    
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    if (!prof) return router.push('/login')
     setProfile(prof)
 
+    // Récupération des tendances (Top créateurs)
     const { data: topPosts } = await supabase.from('posts').select('user_id, total_coins_received, profiles(full_name)').order('total_coins_received', { ascending: false }).limit(20)
     const uniqueCreators = new Map()
     topPosts?.forEach(p => {
@@ -89,13 +98,13 @@ export default function ReseauPage() {
 
     query = query.range(from, to)
     const { data: p } = await query
-    
+
     if (p && p.length > 0) {
       const postsWithCounts = await Promise.all(p.map(async (post) => {
         const { count } = await supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id)
         return { ...post, comments_count: count || 0 }
       }))
-      
+
       if (activeTab === 'pour-toi') {
         postsWithCounts.sort((a, b) => {
           const scoreA = (a.total_coins_received || 0) * 3 + (a.comments_count || 0) * 2
@@ -103,10 +112,9 @@ export default function ReseauPage() {
           return scoreB - scoreA
         })
       }
-      
+
       if (pageNumber === 0) setPosts(postsWithCounts)
       else setPosts(prev => [...prev, ...postsWithCounts])
-      
       setHasMore(p.length === POSTS_PER_PAGE)
     } else {
       if (pageNumber === 0) setPosts([])
@@ -148,7 +156,7 @@ export default function ReseauPage() {
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newText && !newMedia) return showToast('Ajoute du texte ou un média.', 'warning')
-    
+
     if (mediaType === 'video' && newMedia) {
       const video = document.createElement('video')
       video.preload = 'metadata'
@@ -172,7 +180,7 @@ export default function ReseauPage() {
         const fileName = `post-${profile.id}-${Date.now()}.${mediaType === 'image' ? 'jpg' : 'mp4'}`
         const { error: uploadError } = await supabase.storage.from('campaign-images').upload(fileName, blob)
         if (uploadError) throw uploadError
-        const { data } = await supabase.storage.from('campaign-images').getPublicUrl(fileName)
+        const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         mediaUrl = data.publicUrl
       }
 
@@ -198,16 +206,15 @@ export default function ReseauPage() {
     if ((profile.coins_balance || 0) < coinAmount) return showToast('Solde insuffisant.', 'error')
     setIsSending(true)
     try {
-      const { error } = await supabase.rpc('send_coins', {
-        p_sender_id: profile.id, p_receiver_id: activePost.user_id, p_post_id: activePost.id, p_amount: coinAmount
-      })
+      const { error } = await supabase.rpc('send_coins', { p_sender_id: profile.id, p_receiver_id: activePost.user_id, p_post_id: activePost.id, p_amount: coinAmount })
       if (error) throw error
-      
+
       await supabase.from('notifications').insert({
         user_id: activePost.user_id, title: 'Jetons reçus ! 🪙',
-        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`, link: '/dashboard/jetons/retirer'
+        message: `Tu as reçu ${coinAmount} jetons de ${profile.full_name}.`,
+        link: '/dashboard/jetons/retirer'
       })
-      
+
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
       setPosts(posts.map(p => p.id === activePost.id ? { ...p, total_coins_received: (p.total_coins_received || 0) + coinAmount } : p))
@@ -225,27 +232,27 @@ export default function ReseauPage() {
       img.crossOrigin = 'anonymous'
       img.src = post.image_url
       await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
-
+      
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-
+      
       canvas.width = img.width
       canvas.height = img.height + 80
       ctx.drawImage(img, 0, 0)
-
+      
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, img.height, canvas.width, 80)
-
+      
       ctx.fillStyle = '#0f172a'
       ctx.font = 'bold 36px Arial'
       ctx.textAlign = 'center'
       ctx.fillText('XAFEARN', canvas.width / 2, img.height + 50)
-
+      
       ctx.fillStyle = '#0ea5e9'
       ctx.font = 'bold 18px Arial'
       ctx.fillText('Statut • Partage • Gagne', canvas.width / 2, img.height + 70)
-
+      
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
       const link = document.createElement('a')
       link.download = `xafearn-${post.id}.jpg`
@@ -284,7 +291,7 @@ export default function ReseauPage() {
     setIsCommenting(true)
     try {
       await supabase.from('post_comments').insert({ post_id: activeCommentPost.id, user_id: profile.id, content: newComment.trim() })
-      
+
       if (activeCommentPost.user_id !== profile.id) {
         await supabase.from('notifications').insert({
           user_id: activeCommentPost.user_id, title: 'Nouveau commentaire 💬',
@@ -296,7 +303,9 @@ export default function ReseauPage() {
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
       setPosts(posts.map(p => p.id === activeCommentPost.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p))
-    } catch (err) { showToast('Erreur commentaire.', 'error') }
+    } catch (err) {
+      showToast('Erreur commentaire.', 'error')
+    }
     setIsCommenting(false)
   }
 
@@ -308,7 +317,9 @@ export default function ReseauPage() {
       setPosts(posts.filter(p => p.id !== deletingPostId))
       showToast('Publication supprimée.', 'success')
       setDeletingPostId(null)
-    } catch (err) { showToast('Erreur suppression.', 'error') }
+    } catch (err) {
+      showToast('Erreur suppression.', 'error')
+    }
   }
 
   const handleUpdatePost = async () => {
@@ -320,7 +331,9 @@ export default function ReseauPage() {
       setPosts(posts.map(p => p.id === editingPost.id ? { ...p, text_content: editText } : p))
       showToast('Publication modifiée !', 'success')
       setEditingPost(null)
-    } catch (err) { showToast('Erreur modification.', 'error') }
+    } catch (err) {
+      showToast('Erreur modification.', 'error')
+    }
     setIsUpdating(false)
   }
 
@@ -333,21 +346,38 @@ export default function ReseauPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-purple-50 relative pb-20">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {/* Toast personnalisé */}
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-lg font-bold text-sm text-white animate-slide-down ${
+          toast.type === 'success' ? 'bg-emerald-500' : 
+          toast.type === 'error' ? 'bg-red-500' : 
+          toast.type === 'warning' ? 'bg-amber-500' : 'bg-sky-500'
+        }`}>
+          {toast.message}
+        </div>
+      )}
 
       <header className="sticky top-0 z-50 px-4 py-3 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm flex justify-between items-center">
         <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
-        <div className="flex gap-2 text-xs font-bold bg-slate-100 p-1 rounded-full">
-          <button onClick={() => setActiveTab('pour-toi')} className={`px-3 py-1.5 rounded-full transition ${activeTab === 'pour-toi' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Pour toi</button>
-          <button onClick={() => setActiveTab('recents')} className={`px-3 py-1.5 rounded-full transition ${activeTab === 'recents' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Récents</button>
-          <button onClick={() => setActiveTab('abonnements')} className={`px-3 py-1.5 rounded-full transition ${activeTab === 'abonnements' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Abos</button>
+        
+        <div className="flex gap-2 text-xs font-bold bg-slate-100 p-1 rounded-full overflow-x-auto no-scrollbar">
+          <button onClick={() => setActiveTab('pour-toi')} className={`px-3 py-1.5 rounded-full transition whitespace-nowrap ${activeTab === 'pour-toi' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Pour toi</button>
+          <button onClick={() => setActiveTab('recents')} className={`px-3 py-1.5 rounded-full transition whitespace-nowrap ${activeTab === 'recents' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Récents</button>
+          <button onClick={() => setActiveTab('abonnements')} className={`px-3 py-1.5 rounded-full transition whitespace-nowrap ${activeTab === 'abonnements' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Abos</button>
+          <Link href="/series" className="px-3 py-1.5 rounded-full transition bg-purple-100 text-purple-700 hover:bg-purple-200 flex items-center gap-1 whitespace-nowrap shadow-sm">
+            📚 Séries
+          </Link>
         </div>
-        <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold rounded-full shadow-md">+ Jetons</Link>
+
+        <Link href="/dashboard/jetons/acheter" className="px-3 py-1.5 bg-gradient-to-r from-amber-400 to-orange-500 text-white text-xs font-bold rounded-full shadow-md whitespace-nowrap">
+          + Jetons
+        </Link>
       </header>
 
       <div className="pt-4">
+        {/* Tendances */}
         {trending.length > 0 && (
           <div className="px-4 py-3 mb-2 overflow-x-auto no-scrollbar">
             <div className="flex gap-4">
@@ -374,13 +404,14 @@ export default function ReseauPage() {
               <svg className="w-10 h-10 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
             <h3 className="font-black text-lg mb-1 text-slate-800">Aucun post à afficher</h3>
-            <p className="text-slate-500 text-sm">{activeTab === 'abonnements' ? "Abonne-toi à des créateurs pour voir leurs publications ici." : "Sois le premier à publier !"}</p>
+            <p className="text-slate-500 text-sm">
+              {activeTab === 'abonnements' ? "Abonne-toi à des créateurs pour voir leurs publications ici." : "Sois le premier à publier !"}
+            </p>
           </div>
         ) : (
           posts.map(post => (
             <div key={post.id} className="mb-6 px-4">
               <div className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-lg relative">
-                
                 <div className="flex items-center justify-between p-3">
                   <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
                     <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shadow-sm">
@@ -391,7 +422,7 @@ export default function ReseauPage() {
                       <p className="text-[10px] text-slate-400">Publication</p>
                     </div>
                   </Link>
-
+                  
                   {post.user_id === profile?.id && (
                     <div className="relative">
                       <button onClick={() => setOpenMenuId(openMenuId === post.id ? null : post.id)} className="p-2 text-slate-400 hover:text-slate-900">
@@ -410,7 +441,7 @@ export default function ReseauPage() {
                 {post.content_type === 'image' && post.image_url && (
                   <div className="relative w-full bg-slate-100 flex justify-center">
                     <div className="absolute inset-0 bg-cover bg-center blur-xl opacity-50" style={{ backgroundImage: `url(${post.image_url})` }}></div>
-                    <img src={post.image_url} className="relative z-10 w-full h-auto max-h-[60vh] object-contain" />
+                    <img src={post.image_url} className="relative z-10 w-full h-auto max-h-[60vh] object-contain" alt="Post" />
                   </div>
                 )}
                 {post.content_type === 'video' && post.image_url && (
@@ -427,18 +458,15 @@ export default function ReseauPage() {
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                         <span className="font-bold">{post.comments_count || 0}</span>
                       </button>
-                      
                       {post.image_url && (
                         <button onClick={() => handleDownloadWithLogo(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-emerald-500 transition">
                           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                         </button>
                       )}
-
                       <button onClick={() => handleShare(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-purple-500 transition">
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
                       </button>
                     </div>
-                    
                     <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-100 border border-amber-200 active:scale-95 transition">
                       <span>🪙 {post.total_coins_received || 0}</span>
                     </button>
@@ -458,10 +486,12 @@ export default function ReseauPage() {
         )}
       </div>
 
+      {/* Bouton flottant de création */}
       <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-gradient-to-tr from-sky-400 to-blue-600 rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 active:scale-90 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
+      {/* Modal Création */}
       {isCreateOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -487,6 +517,7 @@ export default function ReseauPage() {
         </div>
       )}
 
+      {/* Modal Modification */}
       {editingPost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 text-slate-900 shadow-2xl">
@@ -502,6 +533,7 @@ export default function ReseauPage() {
         </div>
       )}
 
+      {/* Modal Suppression */}
       {deletingPostId && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-center text-slate-900 shadow-2xl">
@@ -518,6 +550,7 @@ export default function ReseauPage() {
         </div>
       )}
 
+      {/* Modal Soutien (Jetons) */}
       {activePost && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 text-slate-900 shadow-2xl">
@@ -540,6 +573,7 @@ export default function ReseauPage() {
         </div>
       )}
 
+      {/* Modal Commentaires */}
       {activeCommentPost && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 backdrop-blur-sm" onClick={() => setActiveCommentPost(null)}>
           <div className="bg-white w-full max-w-md rounded-t-3xl p-4 text-slate-900 max-h-[70vh] flex flex-col shadow-2xl" onClick={e => e.stopPropagation()}>
