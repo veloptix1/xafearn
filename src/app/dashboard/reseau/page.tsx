@@ -70,6 +70,35 @@ export default function ReseauPage() {
   }
 
   async function fetchPosts(prof: any, pageNumber: number) {
+    const from = pageNumber * POSTS_PER_PAGE
+    const to = from + POSTS_PER_PAGE - 1
+
+    if (activeTab === 'pour-toi') {
+      // ALGORITHME DE VIRALITÉ
+      const { data: viralPosts } = await supabase.rpc('get_viral_feed', {
+        p_user_id: prof.id,
+        p_limit: POSTS_PER_PAGE,
+        p_offset: from
+      })
+      
+      if (viralPosts && viralPosts.length > 0) {
+        const formattedPosts = viralPosts.map((p: any) => ({
+          ...p,
+          profiles: { full_name: p.full_name } // On reformate pour correspondre à l'affichage
+        }))
+        
+        if (pageNumber === 0) setPosts(formattedPosts)
+        else setPosts(prev => [...prev, ...formattedPosts])
+        
+        setHasMore(viralPosts.length === POSTS_PER_PAGE)
+      } else {
+        if (pageNumber === 0) setPosts([])
+        setHasMore(false)
+      }
+      return
+    }
+
+    // Pour les autres onglets (Récents et Abonnements), on garde la logique normale
     let query = supabase.from('posts').select('*, profiles(full_name)')
 
     if (activeTab === 'recents') {
@@ -81,14 +110,9 @@ export default function ReseauPage() {
         setPosts([]); setHasMore(false); return
       }
       query = query.in('user_id', followingIds).order('created_at', { ascending: false })
-    } else {
-      query = query.order('created_at', { ascending: false })
     }
 
-    const from = pageNumber * POSTS_PER_PAGE
-    const to = from + POSTS_PER_PAGE - 1
     query = query.range(from, to)
-
     const { data: p } = await query
     
     if (p && p.length > 0) {
