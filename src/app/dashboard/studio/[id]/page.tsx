@@ -140,9 +140,18 @@ export default function SeriesEditorPage() {
             <p className="text-xs text-slate-500">{series.content_type} • {series.is_published ? 'Publiée' : 'Brouillon'}</p>
             <p className="text-xs text-amber-600 font-bold mt-1">🪙 {series.total_earnings || 0} gagnés</p>
           </div>
-          <button onClick={handleTogglePublish} className={`px-3 py-2 rounded-lg text-xs font-bold ${series.is_published ? 'bg-slate-100 text-slate-600' : 'bg-emerald-500 text-white'}`}>
-            {series.is_published ? 'Dépublier' : 'Publier'}
-          </button>
+          <div className="flex gap-2">
+            <Link 
+              href={`/series/${seriesId}`} 
+              target="_blank" 
+              className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold"
+            >
+              Voir
+            </Link>
+            <button onClick={handleTogglePublish} className={`px-3 py-2 rounded-lg text-xs font-bold ${series.is_published ? 'bg-slate-100 text-slate-600' : 'bg-emerald-500 text-white'}`}>
+              {series.is_published ? 'Dépublier' : 'Publier'}
+            </button>
+          </div>
         </div>
 
         {/* Liste des épisodes */}

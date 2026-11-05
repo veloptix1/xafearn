@@ -106,8 +106,9 @@ export default function StudioPage() {
                     <h3 className="font-bold text-slate-900">{s.title}</h3>
                     <p className="text-xs text-slate-500">{s.content_type} • {s.is_published ? 'Publiée' : 'Brouillon'}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
                     <p className="text-xs font-bold text-amber-600">🪙 {s.total_earnings || 0}</p>
+                    <span className="text-[10px] font-bold text-sky-600">Voir →</span>
                   </div>
                 </div>
               </Link>
