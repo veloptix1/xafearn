@@ -72,16 +72,26 @@ export default function SeriesReaderPage() {
       showToast('Épisode débloqué !', 'success')
       setUnlockedIds(prev => [...prev, ep.id])
       setProfile({ ...profile, coins_balance: profile.coins_balance - ep.price_in_coins })
-      setActiveEpisode(ep)
-      setIsVideoEnded(false)
+      playEpisode(ep)
       load()
     }
     setIsUnlocking(false)
   }
 
-  const playEpisode = (ep: any) => {
+  // 🚀 NOUVELLE FONCTION : On compte la vue à l'ouverture de l'épisode
+  const playEpisode = async (ep: any) => {
     setActiveEpisode(ep)
     setIsVideoEnded(false)
+    
+    // On incrémente les vues en base de données (en arrière-plan)
+    try {
+      await supabase.rpc('increment_episode_views', { 
+        p_episode_id: ep.id, 
+        p_series_id: seriesId 
+      })
+    } catch (err) {
+      console.log("Erreur comptage vue:", err)
+    }
   }
 
   // Navigation
@@ -96,7 +106,6 @@ export default function SeriesReaderPage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Header (seulement quand on ne lit pas) */}
       {!activeEpisode && (
         <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex items-center gap-4 shadow-sm">
           <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full transition">
@@ -108,7 +117,6 @@ export default function SeriesReaderPage() {
 
       <div className={`max-w-2xl mx-auto p-4 md:p-6 ${activeEpisode ? 'hidden' : ''}`}>
         
-        {/* Carte de présentation */}
         <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm mb-8 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-sky-100 to-indigo-100 opacity-50"></div>
           <div className="flex gap-5 relative z-10">
@@ -131,7 +139,6 @@ export default function SeriesReaderPage() {
           </div>
         </div>
 
-        {/* Liste des épisodes */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="font-black text-lg text-slate-900">Épisodes</h2>
           <span className="bg-slate-200 text-slate-700 text-xs font-bold px-3 py-1 rounded-full">{episodes.length}</span>
@@ -182,11 +189,8 @@ export default function SeriesReaderPage() {
         </div>
       </div>
 
-      {/* 🚀 LECTEUR PLEIN ÉCRAN IMMERSIF */}
       {activeEpisode && (
         <div className="fixed inset-0 z-[100] bg-black flex flex-col">
-          
-          {/* Bouton fermer flottant */}
           <button 
             onClick={() => setActiveEpisode(null)} 
             className="absolute top-4 right-4 z-50 w-10 h-10 bg-black/50 backdrop-blur-md hover:bg-white/20 text-white rounded-full flex items-center justify-center transition border border-white/10"
@@ -194,13 +198,11 @@ export default function SeriesReaderPage() {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
           </button>
 
-          {/* Info Épisode (flottant en haut à gauche) */}
           <div className="absolute top-4 left-4 z-50 bg-black/50 backdrop-blur-md px-4 py-2 rounded-xl border border-white/10">
             <p className="text-[10px] text-sky-400 font-bold uppercase tracking-wider mb-0.5">Épisode {activeEpisode.episode_number}</p>
             <h2 className="font-bold text-sm text-white">{activeEpisode.title}</h2>
           </div>
 
-          {/* Contenu (Vidéo, Image ou Texte) */}
           <div className="flex-1 relative flex items-center justify-center bg-black overflow-hidden">
             {series.content_type === 'video' && activeEpisode.content_media_url && (
               <video
@@ -230,10 +232,7 @@ export default function SeriesReaderPage() {
             )}
           </div>
 
-          {/* 🚀 BARRE DE NAVIGATION FLOTTANTE (en bas) */}
           <div className="absolute bottom-0 left-0 w-full p-4 bg-gradient-to-t from-black/90 to-transparent flex justify-between items-end gap-3 pointer-events-none">
-            
-            {/* Bouton Précédent */}
             <button 
               onClick={() => playEpisode(prevEpisode)}
               disabled={!prevEpisode}
@@ -243,14 +242,13 @@ export default function SeriesReaderPage() {
               <span className="hidden sm:inline">Précédent</span>
             </button>
 
-            {/* Bouton Suivant / Débloquer */}
             {nextEpisode ? (
               isNextUnlocked ? (
                 <button 
                   onClick={() => playEpisode(nextEpisode)}
                   className={`pointer-events-auto px-6 py-3 rounded-full font-bold text-sm transition flex items-center gap-2 shadow-lg ${
                     isVideoEnded || series.content_type !== 'video'
-                      ? 'bg-sky-500 hover:bg-sky-400 text-white animate-bounce' // Attire l'œil quand la vidéo est finie
+                      ? 'bg-sky-500 hover:bg-sky-400 text-white animate-bounce'
                       : 'bg-black/50 backdrop-blur-md hover:bg-white/20 text-white border border-white/10'
                   }`}
                 >
@@ -273,7 +271,6 @@ export default function SeriesReaderPage() {
               </div>
             )}
           </div>
-
         </div>
       )}
     </main>
