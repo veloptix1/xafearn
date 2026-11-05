@@ -12,6 +12,7 @@ export default function ReseauPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [posts, setPosts] = useState<any[]>([])
+  const [trending, setTrending] = useState<any[]>([])
   const [activeTab, setActiveTab] = useState<'pour-toi' | 'recents' | 'abonnements'>('pour-toi')
   const [page, setPage] = useState(0)
   const [hasMore, setHasMore] = useState(true)
@@ -55,6 +56,16 @@ export default function ReseauPage() {
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
 
+    // Charger les tendances (Top 5 créateurs par jetons)
+    const { data: topPosts } = await supabase.from('posts').select('user_id, total_coins_received, profiles(full_name)').order('total_coins_received', { ascending: false }).limit(20)
+    const uniqueCreators = new Map()
+    topPosts?.forEach(p => {
+      if (!uniqueCreators.has(p.user_id) && p.profiles?.full_name) {
+        uniqueCreators.set(p.user_id, { id: p.user_id, name: p.profiles.full_name, coins: p.total_coins_received })
+      }
+    })
+    setTrending(Array.from(uniqueCreators.values()).slice(0, 5))
+
     await fetchPosts(prof, 0)
     setLoading(false)
   }
@@ -62,25 +73,19 @@ export default function ReseauPage() {
   async function fetchPosts(prof: any, pageNumber: number) {
     let query = supabase.from('posts').select('*, profiles(full_name)')
 
-    // Filtrage selon l'onglet
     if (activeTab === 'recents') {
       query = query.order('created_at', { ascending: false })
     } else if (activeTab === 'abonnements') {
-      // On récupère les IDs des personnes qu'on suit
       const { data: follows } = await supabase.from('follows').select('following_id').eq('follower_id', prof.id)
       const followingIds = follows?.map(f => f.following_id) || []
-      
       if (followingIds.length === 0) {
-        setPosts([])
-        setHasMore(false)
-        return
+        setPosts([]); setHasMore(false); return
       }
       query = query.in('user_id', followingIds).order('created_at', { ascending: false })
     } else {
       query = query.order('created_at', { ascending: false })
     }
 
-    // Pagination (on charge 10 posts à la fois)
     const from = pageNumber * POSTS_PER_PAGE
     const to = from + POSTS_PER_PAGE - 1
     query = query.range(from, to)
@@ -88,17 +93,13 @@ export default function ReseauPage() {
     const { data: p } = await query
     
     if (p && p.length > 0) {
-      // On compte les commentaires pour chaque post
       const postsWithCounts = await Promise.all(p.map(async (post) => {
         const { count } = await supabase.from('post_comments').select('*', { count: 'exact', head: true }).eq('post_id', post.id)
         return { ...post, comments_count: count || 0 }
       }))
       
-      if (pageNumber === 0) {
-        setPosts(postsWithCounts)
-      } else {
-        setPosts(prev => [...prev, ...postsWithCounts])
-      }
+      if (pageNumber === 0) setPosts(postsWithCounts)
+      else setPosts(prev => [...prev, ...postsWithCounts])
       
       setHasMore(p.length === POSTS_PER_PAGE)
     } else {
@@ -203,8 +204,6 @@ export default function ReseauPage() {
       
       showToast(`Tu as envoyé ${coinAmount} jetons !`, 'success')
       setActivePost(null)
-      
-      // Mettre à jour le post localement
       setPosts(posts.map(p => p.id === activePost.id ? { ...p, total_coins_received: (p.total_coins_received || 0) + coinAmount } : p))
       setProfile({ ...profile, coins_balance: profile.coins_balance - coinAmount })
     } catch (err: any) {
@@ -236,8 +235,6 @@ export default function ReseauPage() {
       setNewComment('')
       const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', activeCommentPost.id).order('created_at', { ascending: true })
       setComments(data || [])
-      
-      // Mettre à jour le compteur localement
       setPosts(posts.map(p => p.id === activeCommentPost.id ? { ...p, comments_count: (p.comments_count || 0) + 1 } : p))
     } catch (err) { showToast('Erreur commentaire.', 'error') }
     setIsCommenting(false)
@@ -248,7 +245,6 @@ export default function ReseauPage() {
     try {
       const { error } = await supabase.from('posts').delete().eq('id', deletingPostId)
       if (error) throw error
-      
       setPosts(posts.filter(p => p.id !== deletingPostId))
       showToast('Publication supprimée.', 'success')
       setDeletingPostId(null)
@@ -261,7 +257,6 @@ export default function ReseauPage() {
     try {
       const { error } = await supabase.from('posts').update({ text_content: editText }).eq('id', editingPost.id)
       if (error) throw error
-      
       setPosts(posts.map(p => p.id === editingPost.id ? { ...p, text_content: editText } : p))
       showToast('Publication modifiée !', 'success')
       setEditingPost(null)
@@ -288,15 +283,32 @@ export default function ReseauPage() {
       </header>
 
       <div className="pt-16 pb-20">
+        
+        {/* SECTION TENDANCES */}
+        {trending.length > 0 && (
+          <div className="px-4 py-3 border-b border-white/10 mb-4 overflow-x-auto no-scrollbar">
+            <div className="flex gap-3">
+              {trending.map((creator, idx) => (
+                <Link key={creator.id} href={`/u/${creator.id}`} className="flex flex-col items-center gap-1 shrink-0">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-400 to-orange-500 p-0.5">
+                    <div className="w-full h-full bg-slate-900 rounded-full flex items-center justify-center font-bold text-white border-2 border-black">
+                      {creator.name.charAt(0)}
+                    </div>
+                  </div>
+                  <p className="text-[10px] font-bold text-slate-300 w-16 truncate text-center">{creator.name}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
         {posts.length === 0 && !loading ? (
-          <div className="h-[70vh] flex flex-col items-center justify-center text-center px-6">
+          <div className="h-[60vh] flex flex-col items-center justify-center text-center px-6">
             <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mb-4">
               <svg className="w-10 h-10 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
             </div>
             <h3 className="font-bold text-lg mb-1">Aucun post à afficher</h3>
-            <p className="text-slate-400 text-sm">
-              {activeTab === 'abonnements' ? "Abonne-toi à des créateurs pour voir leurs publications ici." : "Sois le premier à publier !"}
-            </p>
+            <p className="text-slate-400 text-sm">{activeTab === 'abonnements' ? "Abonne-toi à des créateurs pour voir leurs publications ici." : "Sois le premier à publier !"}</p>
           </div>
         ) : (
           posts.map(post => (
@@ -326,8 +338,12 @@ export default function ReseauPage() {
                   )}
                 </div>
 
+                {/* Image avec fond flou pour l'immersion */}
                 {post.content_type === 'image' && post.image_url && (
-                  <img src={post.image_url} className="w-full h-auto max-h-[60vh] object-contain bg-black" />
+                  <div className="relative w-full bg-black flex justify-center">
+                    <div className="absolute inset-0 bg-cover bg-center blur-xl opacity-30" style={{ backgroundImage: `url(${post.image_url})` }}></div>
+                    <img src={post.image_url} className="relative z-10 w-full h-auto max-h-[60vh] object-contain" />
+                  </div>
                 )}
                 {post.content_type === 'video' && post.image_url && (
                   <video src={post.image_url} controls className="w-full h-auto max-h-[60vh] bg-black" />
@@ -340,7 +356,7 @@ export default function ReseauPage() {
                       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                       <span className="font-bold">{post.comments_count || 0}</span>
                     </button>
-                    <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500/20 border border-amber-500/20">
+                    <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-500/20 border border-amber-500/20 active:scale-95 transition">
                       <span>🪙 {post.total_coins_received || 0}</span>
                     </button>
                   </div>
@@ -350,7 +366,6 @@ export default function ReseauPage() {
           ))
         )}
 
-        {/* Bouton Charger plus (Pagination) */}
         {hasMore && posts.length > 0 && (
           <div className="flex justify-center py-6">
             <button onClick={loadMore} disabled={loadingMore} className="px-6 py-2 bg-slate-800 text-white text-sm font-bold rounded-full hover:bg-slate-700 transition disabled:opacity-50">
@@ -360,7 +375,7 @@ export default function ReseauPage() {
         )}
       </div>
 
-      <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50">
+      <button onClick={() => setIsCreateOpen(true)} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 rounded-full flex items-center justify-center shadow-lg shadow-sky-500/50 active:scale-90 transition">
         <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
