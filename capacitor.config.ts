@@ -3,9 +3,10 @@ import { CapacitorConfig } from '@capacitor/cli';
 const config: CapacitorConfig = {
   appId: 'com.xafearn.app',
   appName: 'XAFEARN',
-  webDir: 'out', // Next.js exporte dans le dossier 'out' par défaut
+  webDir: 'public',
   server: {
-    androidScheme: 'https'
+    url: 'https://www.getagriculture.store',
+    cleartext: true
   },
   plugins: {
     SplashScreen: {
