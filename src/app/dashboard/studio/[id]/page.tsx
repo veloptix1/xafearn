@@ -1,4 +1,5 @@
 'use client'
+
 import { useState, useEffect } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -10,31 +11,34 @@ export default function SeriesEditorPage() {
   const router = useRouter()
   const params = useParams()
   const seriesId = params.id as string
-  
+
   const [loading, setLoading] = useState(true)
   const [series, setSeries] = useState<any>(null)
   const [episodes, setEpisodes] = useState<any[]>([])
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isEditSeriesOpen, setIsEditSeriesOpen] = useState(false)
+  
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
-
-  // Formulaire d'épisode
+  
   const [epTitle, setEpTitle] = useState('')
   const [epText, setEpText] = useState('')
   const [epMedia, setEpMedia] = useState<File | null>(null)
   const [epPrice, setEpPrice] = useState(10)
   const [isUploading, setIsUploading] = useState(false)
 
-  useEffect(() => { load() }, [seriesId])
+  useEffect(() => {
+    load()
+  }, [seriesId])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
-    
+
     const { data: s } = await supabase.from('series').select('*').eq('id', seriesId).single()
     if (!s || s.creator_id !== user.id) return router.push('/dashboard/studio')
+    
     setSeries(s)
     setEditTitle(s.title)
     setEditDescription(s.description || '')
@@ -51,8 +55,9 @@ export default function SeriesEditorPage() {
 
   const handleSaveSeries = async () => {
     const { error } = await supabase.from('series').update({ title: editTitle, description: editDescription }).eq('id', seriesId)
-    if (error) showToast('Erreur : ' + error.message, 'error')
-    else {
+    if (error) {
+      showToast('Erreur : ' + error.message, 'error')
+    } else {
       showToast('Série modifiée !', 'success')
       setIsEditSeriesOpen(false)
       load()
@@ -69,8 +74,9 @@ export default function SeriesEditorPage() {
   const handleDeleteEpisode = async (ep: any) => {
     if (!confirm(`Supprimer l'épisode ${ep.episode_number} ?`)) return
     const { error } = await supabase.from('episodes').delete().eq('id', ep.id)
-    if (error) showToast('Erreur : ' + error.message, 'error')
-    else {
+    if (error) {
+      showToast('Erreur : ' + error.message, 'error')
+    } else {
       showToast('Épisode supprimé.', 'success')
       load()
     }
@@ -79,6 +85,7 @@ export default function SeriesEditorPage() {
   const handleAddEpisode = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsUploading(true)
+    
     const nextNumber = episodes.length + 1
     const isFree = nextNumber <= 4
 
@@ -90,38 +97,40 @@ export default function SeriesEditorPage() {
 
     try {
       let mediaUrl = null
+
       if (series.content_type !== 'text' && epMedia) {
-        // Vérifier la durée si c'est une vidéo
         if (series.content_type === 'video') {
-          const video = document.createElement('video')
-          video.preload = 'metadata'
           await new Promise((resolve, reject) => {
+            const video = document.createElement('video')
+            video.preload = 'metadata'
             video.onloadedmetadata = () => {
-              if (video.duration > 120) reject(new Error('Vidéo > 2 minutes'))
-              else resolve(null)
+              window.URL.revokeObjectURL(video.src)
+              if (video.duration > 120) {
+                reject(new Error('La vidéo ne doit pas dépasser 2 minutes.'))
+              } else {
+                resolve(true)
+              }
             }
-            video.onerror = reject
+            video.onerror = () => reject(new Error('Fichier vidéo invalide ou corrompu.'))
             video.src = URL.createObjectURL(epMedia!)
           })
         }
 
-        // Déterminer l'extension
         const ext = epMedia.name.split('.').pop() || (series.content_type === 'video' ? 'mp4' : 'jpg')
         const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
         
         const { error: upErr } = await supabase.storage
           .from('campaign-images')
           .upload(fileName, epMedia, { contentType: epMedia.type })
-        
+
         if (upErr) throw new Error('Upload échoué : ' + upErr.message)
-        
+
         const { data } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         mediaUrl = data.publicUrl
-        
       }
 
-      // Vérifier que mediaUrl existe pour les types image/vidéo
-        throw new Error('Le fichier n'a pas été uploadé correctement.')
+      if (series.content_type !== 'text' && !mediaUrl) {
+        throw new Error('Le fichier n\'a pas été uploadé correctement. Réessayez.')
       }
 
       const { error } = await supabase.from('episodes').insert({
@@ -135,14 +144,16 @@ export default function SeriesEditorPage() {
       })
 
       if (error) throw error
-      showToast(`Épisode ${nextNumber} ajouté !`, 'success')
+
+      showToast(`Épisode ${nextNumber} ajouté avec succès !`, 'success')
       setIsAddOpen(false)
       setEpTitle(''); setEpText(''); setEpMedia(null); setEpPrice(10)
       load()
     } catch (err: any) {
       showToast('Erreur : ' + err.message, 'error')
+    } finally {
+      setIsUploading(false)
     }
-    setIsUploading(false)
   }
 
   const handleTogglePublish = async () => {
@@ -154,6 +165,7 @@ export default function SeriesEditorPage() {
   }
 
   if (loading) return <div className="text-center py-20 text-slate-500">Chargement...</div>
+  if (!series) return null
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
@@ -164,54 +176,66 @@ export default function SeriesEditorPage() {
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </Link>
         <h1 className="text-sm font-bold text-slate-900 truncate px-2">{series.title}</h1>
-        <button onClick={() => setIsAddOpen(true)} className="px-3 py-2 bg-sky-500 text-white text-xs font-bold rounded-lg">+ Épisode</button>
+        <button onClick={() => setIsAddOpen(true)} className="px-3 py-2 bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold rounded-lg transition">
+          + Épisode
+        </button>
       </header>
 
       <div className="p-4 md:p-8 max-w-2xl mx-auto mt-4">
-        
-        {/* Carte série avec boutons Modifier/Supprimer */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm">
-          <div className="flex gap-4 items-center mb-3">
+          <div className="flex gap-4 items-center mb-4">
             {series.cover_url ? (
-              <img src={series.cover_url} className="w-20 h-20 rounded-xl object-cover" />
+              <img src={series.cover_url} className="w-20 h-20 rounded-xl object-cover bg-slate-100" alt={series.title} />
             ) : (
               <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-3xl">📖</div>
             )}
             <div className="flex-1">
               <h2 className="font-black text-slate-900">{series.title}</h2>
-              <p className="text-xs text-slate-500">{series.content_type} • {series.is_published ? 'Publiée' : 'Brouillon'}</p>
-              <p className="text-xs text-amber-600 font-bold mt-1">🪙 {series.total_earnings || 0} gagnés</p>
+              <p className="text-xs text-slate-500 capitalize">{series.content_type} • {series.is_published ? 'Publiée' : 'Brouillon'}</p>
+              <p className="text-xs text-amber-600 font-bold mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded">🪙 {series.total_earnings || 0} gagnés</p>
             </div>
           </div>
-
+          
           <div className="flex flex-wrap gap-2">
-            <Link href={`/series/${seriesId}`} target="_blank" className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold">Voir</Link>
-            <button onClick={() => setIsEditSeriesOpen(true)} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold">Modifier</button>
-            <button onClick={handleTogglePublish} className={`px-3 py-2 rounded-lg text-xs font-bold ${series.is_published ? 'bg-slate-100 text-slate-600' : 'bg-emerald-500 text-white'}`}>
+            <Link href={`/series/${seriesId}`} target="_blank" className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold hover:bg-sky-100 transition">
+              Voir la page
+            </Link>
+            <button onClick={() => setIsEditSeriesOpen(true)} className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition">
+              Modifier
+            </button>
+            <button onClick={handleTogglePublish} className={`px-3 py-2 rounded-lg text-xs font-bold transition ${series.is_published ? 'bg-slate-100 hover:bg-slate-200 text-slate-600' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>
               {series.is_published ? 'Dépublier' : 'Publier'}
             </button>
-            <button onClick={handleDeleteSeries} className="px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-bold ml-auto">Supprimer la série</button>
+            <button onClick={handleDeleteSeries} className="px-3 py-2 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg text-xs font-bold ml-auto transition">
+              Supprimer
+            </button>
           </div>
         </div>
 
-        {/* Liste des épisodes */}
         <h3 className="font-bold text-slate-900 mb-3">Épisodes ({episodes.length})</h3>
         
         {episodes.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl text-center text-slate-500 text-sm">Aucun épisode.</div>
+          <div className="bg-white border border-slate-200 p-8 rounded-2xl text-center">
+            <p className="text-slate-500 text-sm mb-4">Aucun épisode pour le moment.</p>
+            <button onClick={() => setIsAddOpen(true)} className="px-4 py-2 bg-sky-500 text-white text-xs font-bold rounded-lg">Ajouter le premier épisode</button>
+          </div>
         ) : (
           <div className="space-y-2">
             {episodes.map((ep: any) => (
-              <div key={ep.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center">
+              <div key={ep.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center shadow-sm">
                 <div className="flex-1">
                   <p className="font-bold text-slate-900 text-sm">Ép. {ep.episode_number} : {ep.title}</p>
-                  <p className="text-xs text-slate-500">{ep.is_free ? '🎁 Gratuit' : `🪙 ${ep.price_in_coins} jetons`}</p>
+                  <p className="text-xs text-slate-500">
+                    {ep.is_free ? '🎁 Gratuit' : `🪙 ${ep.price_in_coins} jetons`}
+                  </p>
                 </div>
                 <div className="flex gap-2 items-center">
                   {ep.episode_number <= 4 && (
                     <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">GRATUIT</span>
                   )}
-                  <button onClick={() => handleDeleteEpisode(ep)} className="px-2 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-lg">Suppr.</button>
+                  <button onClick={() => handleDeleteEpisode(ep)} className="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-bold rounded-lg transition">
+                    Suppr.
+                  </button>
                 </div>
               </div>
             ))}
@@ -219,22 +243,20 @@ export default function SeriesEditorPage() {
         )}
       </div>
 
-      {/* Modal de modification de série */}
       {isEditSeriesOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6">
             <h2 className="font-bold text-lg mb-4">Modifier la série</h2>
-            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3" />
-            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-3" />
+            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-sky-500" />
+            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-4 focus:outline-none focus:ring-2 focus:ring-sky-500" />
             <div className="flex gap-2">
               <button onClick={() => setIsEditSeriesOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
-              <button onClick={handleSaveSeries} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl text-sm">Enregistrer</button>
+              <button onClick={handleSaveSeries} className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl text-sm transition">Enregistrer</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Modal d'ajout d'épisode */}
       {isAddOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
@@ -246,31 +268,35 @@ export default function SeriesEditorPage() {
               </div>
             )}
 
-            <form onSubmit={handleAddEpisode} className="space-y-3">
-              <input type="text" placeholder={`Titre (défaut: Épisode ${episodes.length + 1})`} value={epTitle} onChange={e => setEpTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+            <form onSubmit={handleAddEpisode} className="space-y-4">
+              <input type="text" placeholder={`Titre (défaut: Épisode ${episodes.length + 1})`} value={epTitle} onChange={e => setEpTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
               
               {series.content_type === 'text' ? (
-                <textarea required placeholder="Écris ton épisode ici..." value={epText} onChange={e => setEpText(e.target.value)} rows={8} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none" />
+                <textarea required placeholder="Écris ton épisode ici..." value={epText} onChange={e => setEpText(e.target.value)} rows={8} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500" />
               ) : (
                 <div>
-                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center">
-                    <input type="file" accept={series.content_type === 'video' ? 'video/*' : 'image/*'} onChange={e => setEpMedia(e.target.files?.[0] || null)} className="w-full text-xs" />
+                  <div className="border-2 border-dashed border-slate-200 hover:border-sky-400 rounded-xl p-4 text-center transition">
+                    <input type="file" required accept={series.content_type === 'video' ? 'video/*' : 'image/*'} onChange={e => setEpMedia(e.target.files?.[0] || null)} className="w-full text-xs text-slate-500" />
                   </div>
-                  {series.content_type === 'video' && <p className="text-xs text-amber-600 mt-2">⚠️ Max 2 minutes.</p>}
+                  {series.content_type === 'video' && (
+                    <p className="text-xs text-amber-600 mt-2 font-medium">⚠️ La vidéo ne doit pas dépasser 2 minutes.</p>
+                  )}
                 </div>
               )}
 
               {episodes.length >= 4 && (
                 <div>
-                  <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Prix (3 à 500 jetons)</label>
-                  <input type="number" min="3" max="500" required value={epPrice} onChange={e => setEpPrice(parseInt(e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Prix (3 à 500 jetons)</label>
+                  <input type="number" min="3" max="500" required value={epPrice} onChange={e => setEpPrice(parseInt(e.target.value))} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
                 </div>
               )}
 
               <div className="flex gap-2 pt-2">
-                <button type="button" onClick={() => setIsAddOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
-                <button type="submit" disabled={isUploading} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl text-sm disabled:opacity-50">
-                  {isUploading ? 'Ajout...' : 'Ajouter'}
+                <button type="button" onClick={() => setIsAddOpen(false)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-sm transition">
+                  Annuler
+                </button>
+                <button type="submit" disabled={isUploading} className="flex-1 py-3 bg-sky-500 hover:bg-sky-600 text-white font-bold rounded-xl text-sm transition disabled:opacity-50">
+                  {isUploading ? 'Traitement...' : 'Ajouter l\'épisode'}
                 </button>
               </div>
             </form>
