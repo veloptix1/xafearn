@@ -211,6 +211,60 @@ export default function ReseauPage() {
     setIsSending(false)
   }
 
+  const handleDownloadWithLogo = async (post: any) => {
+    if (!post.image_url) return showToast("Pas d'image à télécharger.", 'warning')
+    try {
+      const img = new Image()
+      img.crossOrigin = 'anonymous'
+      img.src = post.image_url
+      await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
+
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+
+      canvas.width = img.width
+      canvas.height = img.height + 80
+      ctx.drawImage(img, 0, 0)
+
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, img.height, canvas.width, 80)
+
+      ctx.fillStyle = '#0f172a'
+      ctx.font = 'bold 36px Arial'
+      ctx.textAlign = 'center'
+      ctx.fillText('XAFEARN', canvas.width / 2, img.height + 50)
+
+      ctx.fillStyle = '#0ea5e9'
+      ctx.font = 'bold 18px Arial'
+      ctx.fillText('Statut • Partage • Gagne', canvas.width / 2, img.height + 70)
+
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
+      const link = document.createElement('a')
+      link.download = `xafearn-${post.id}.jpg`
+      link.href = dataUrl
+      link.click()
+      showToast('Image téléchargée avec le logo XAFEARN !', 'success')
+    } catch (err) {
+      showToast('Erreur lors du téléchargement.', 'error')
+    }
+  }
+
+  const handleShare = async (post: any) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: post.profiles?.full_name + ' sur XAFEARN',
+          text: post.text_content || 'Découvre cette publication sur XAFEARN !',
+          url: window.location.origin + '/u/' + post.user_id,
+        })
+      } catch (err) {}
+    } else {
+      await navigator.clipboard.writeText(window.location.origin + '/u/' + post.user_id)
+      showToast('Lien copié dans le presse-papiers !', 'success')
+    }
+  }
+
   const openComments = async (post: any) => {
     setActiveCommentPost(post)
     const { data } = await supabase.from('post_comments').select('*, profiles(full_name)').eq('post_id', post.id).order('created_at', { ascending: true })
@@ -274,7 +328,6 @@ export default function ReseauPage() {
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-purple-50 relative pb-20">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
 
-      {/* Header Lumineux */}
       <header className="sticky top-0 z-50 px-4 py-3 bg-white/80 backdrop-blur-md border-b border-slate-200 shadow-sm flex justify-between items-center">
         <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -288,12 +341,10 @@ export default function ReseauPage() {
       </header>
 
       <div className="pt-4">
-        
-        {/* SECTION TENDANCES MAGIQUE */}
         {trending.length > 0 && (
           <div className="px-4 py-3 mb-2 overflow-x-auto no-scrollbar">
             <div className="flex gap-4">
-              {trending.map((creator, idx) => (
+              {trending.map((creator) => (
                 <Link key={creator.id} href={`/u/${creator.id}`} className="flex flex-col items-center gap-1 shrink-0 group">
                   <div className="w-16 h-16 rounded-full bg-gradient-to-tr from-cyan-400 via-blue-500 to-purple-500 p-0.5 shadow-lg group-hover:scale-105 transition">
                     <div className="w-full h-full bg-white rounded-full flex items-center justify-center font-black text-xl text-slate-800">
@@ -349,7 +400,6 @@ export default function ReseauPage() {
                   )}
                 </div>
 
-                {/* Image avec fond flou pour l'immersion */}
                 {post.content_type === 'image' && post.image_url && (
                   <div className="relative w-full bg-slate-100 flex justify-center">
                     <div className="absolute inset-0 bg-cover bg-center blur-xl opacity-50" style={{ backgroundImage: `url(${post.image_url})` }}></div>
@@ -363,10 +413,23 @@ export default function ReseauPage() {
                 <div className="p-4">
                   <p className="text-sm text-slate-700 mb-4 whitespace-pre-wrap">{post.text_content}</p>
                   <div className="flex items-center justify-between border-t border-slate-100 pt-3">
-                    <button onClick={() => openComments(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-sky-500 transition">
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
-                      <span className="font-bold">{post.comments_count || 0}</span>
-                    </button>
+                    <div className="flex gap-4">
+                      <button onClick={() => openComments(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-sky-500 transition">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
+                        <span className="font-bold">{post.comments_count || 0}</span>
+                      </button>
+                      
+                      {post.image_url && (
+                        <button onClick={() => handleDownloadWithLogo(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-emerald-500 transition">
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                        </button>
+                      )}
+
+                      <button onClick={() => handleShare(post)} className="flex items-center gap-1.5 text-sm text-slate-500 hover:text-purple-500 transition">
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+                      </button>
+                    </div>
+                    
                     <button onClick={() => { setActivePost(post); setCoinAmount(10); }} className="flex items-center gap-1.5 bg-amber-50 text-amber-600 px-4 py-2 rounded-full font-bold text-sm hover:bg-amber-100 border border-amber-200 active:scale-95 transition">
                       <span>🪙 {post.total_coins_received || 0}</span>
                     </button>
