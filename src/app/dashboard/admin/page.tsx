@@ -5,7 +5,6 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { EmailForm, AdminUserRow, TaskAdminSection, WithdrawalAdminSection } from './EmailComponents'
 
-// --- ACTIONS ---
 async function updateCampaignStatus(formData: FormData) {
   'use server'
   const supabase = await createClient()
@@ -43,7 +42,7 @@ async function validateSubmission(formData: FormData) {
       message: 'Félicitations ! Toutes les campagnes payantes sont débloquées.', link: '/dashboard/annonces'
     })
   } else {
-    const gainPerView = (campaign as any).custom_gain_per_view ? (campaign as any).custom_gain_per_view : (profile.level === 1 ? 0.50 : profile.level === 2 ? 1.25 : 1.75)
+    const gainPerView = campaign.custom_gain_per_view || (profile.level === 1 ? 0.50 : profile.level === 2 ? 1.25 : 1.75)
     const totalGain = gainPerView * views
     await supabase.from('profiles').update({ balance: (profile.balance || 0) + totalGain }).eq('id', sub.user_id)
     await supabase.from('notifications').insert({
@@ -61,11 +60,26 @@ async function rejectSubmission(formData: FormData) {
   revalidatePath('/dashboard/admin')
 }
 
-// --- COMPOSANT ---
+async function approveCampaignWithOptions(formData: FormData) {
+  'use server'
+  const supabase = await createClient()
+  const id = formData.get('id') as string
+  const display_type = formData.get('display_type') as string
+  const gain_per_view = parseFloat(formData.get('gain_per_view') as string) || null
+
+  await supabase.from('campaigns').update({ 
+    status: 'active', 
+    display_type, 
+    custom_gain_per_view: gain_per_view 
+  }).eq('id', id)
+  
+  revalidatePath('/dashboard/admin')
+}
+
 async function AdminContent() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  if (!user) return redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
   if (!profile || (profile.role !== 'admin' && !profile.is_admin)) {
@@ -82,24 +96,30 @@ async function AdminContent() {
   const pendingSubmissions = submissions?.filter(s => s.status === 'pending') || []
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       
-      {/* 1. EMAILS GROUPÉS */}
+      {/* SECTION 1 : EMAILS GROUPÉS */}
       <div className="bg-slate-900 rounded-3xl p-6 text-white shadow-lg">
         <h2 className="text-xl font-bold mb-2">📧 Communication</h2>
         <p className="text-slate-400 text-sm mb-4">Envoie un email à tes utilisateurs.</p>
         <EmailForm users={users || []} />
       </div>
 
-      {/* 1.5 TÂCHES EN ATTENTE */}
-      <TaskAdminSection />
-
-      {/* 1.7 RETRAITS EN ATTENTE */}
-      <WithdrawalAdminSection />
-
-      {/* 2. PREUVES */}
+      {/* SECTION 2 : TÂCHES À VALIDER */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Preuves en attente ({pendingSubmissions.length})</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">🎮 Tâches à valider</h2>
+        <TaskAdminSection />
+      </div>
+
+      {/* SECTION 3 : RETRAITS */}
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">💸 Retraits</h2>
+        <WithdrawalAdminSection />
+      </div>
+
+      {/* SECTION 4 : PREUVES DE DIFFUSION */}
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">📸 Preuves de diffusion ({pendingSubmissions.length})</h2>
         {pendingSubmissions.length === 0 ? (
           <div className="bg-white border border-slate-200 p-6 rounded-2xl text-center text-slate-500 text-sm">Aucune preuve en attente.</div>
         ) : (
@@ -145,34 +165,9 @@ async function AdminContent() {
         )}
       </div>
 
-      {/* 3. UTILISATEURS (Avec Modal de gestion) */}
+      {/* SECTION 5 : CAMPAGNES */}
       <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Gestion des utilisateurs ({users?.length || 0})</h2>
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
-                <tr>
-                  <th className="px-4 py-3">Utilisateur</th>
-                  <th className="px-4 py-3">Rôle</th>
-                  <th className="px-4 py-3">Statut</th>
-                  <th className="px-4 py-3">Solde</th>
-                  <th className="px-4 py-3 text-right">Gérer</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {users?.map((u: any) => (
-                  <AdminUserRow key={u.id} user={u} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
-      {/* 4. CAMPAGNES */}
-      <div>
-        <h2 className="text-xl font-bold text-slate-900 mb-4">Campagnes ({campaigns?.length || 0})</h2>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">📢 Campagnes ({campaigns?.length || 0})</h2>
         <div className="space-y-2">
           {campaigns?.map((c: any) => (
             <div key={c.id} className="bg-white border border-slate-200 rounded-xl shadow-sm p-3 flex gap-3 items-center">
@@ -183,10 +178,14 @@ async function AdminContent() {
               </div>
               <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{c.status}</span>
               {c.status === 'pending' && (
-                <form action={updateCampaignStatus}>
+                <form action={approveCampaignWithOptions} className="flex items-center gap-1 bg-slate-50 p-1 rounded-lg">
                   <input type="hidden" name="id" value={c.id} />
-                  <input type="hidden" name="status" value="active" />
-                  <button className="px-2 py-1 bg-emerald-500 text-white text-xs font-bold rounded">Approuver</button>
+                  <select name="display_type" className="p-1 text-xs border rounded bg-white">
+                    <option value="campaign">Catalogue</option>
+                    <option value="task">Tâche</option>
+                  </select>
+                  <input type="number" name="gain_per_view" step="0.01" placeholder="Gain/vue" className="w-16 p-1 text-xs border rounded" />
+                  <button type="submit" className="px-2 py-1 bg-emerald-500 text-white text-[10px] font-bold rounded">OK</button>
                 </form>
               )}
               <form action={deleteCampaign}>
@@ -195,6 +194,30 @@ async function AdminContent() {
               </form>
             </div>
           ))}
+        </div>
+      </div>
+
+      {/* SECTION 6 : UTILISATEURS */}
+      <div>
+        <h2 className="text-xl font-bold text-slate-900 mb-4">👥 Utilisateurs ({users?.length || 0})</h2>
+        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-slate-50 text-slate-500 text-xs uppercase">
+                <tr>
+                  <th className="px-4 py-3">Utilisateur</th>
+                  <th className="px-4 py-3">Rôle</th>
+                  <th className="px-4 py-3">Solde</th>
+                  <th className="px-4 py-3 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {users?.map((u: any) => (
+                  <AdminUserRow key={u.id} user={u} />
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -210,11 +233,9 @@ export default function AdminPage() {
           <Link href="/dashboard" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
           </Link>
-          <h1 className="text-lg font-bold text-slate-900">Administration</h1>
+          <img src="/logo.png" alt="XAFEARN" className="h-6 w-auto object-contain" />
         </div>
-        <Link href="/dashboard/admin/annonce-test" className="px-3 py-1.5 bg-sky-500 text-white text-xs font-bold rounded-lg hover:bg-sky-400">
-          Annonce test
-        </Link>
+        <Link href="/dashboard/admin/annonce-test" className="px-3 py-1.5 bg-sky-500 text-white text-xs font-bold rounded-lg">Annonce test</Link>
       </header>
       <div className="p-4 md:p-8 max-w-5xl mx-auto mt-2">
         <Suspense fallback={<div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>}>
