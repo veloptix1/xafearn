@@ -414,7 +414,9 @@ export default function ReseauPage() {
                   </div>
                 )}
                 {post.content_type === 'video' && post.image_url && (
-                  <video src={post.image_url} controls className="w-full h-auto max-h-[60vh] bg-black" />
+                  <div className="relative w-full bg-black flex justify-center" style={{ aspectRatio: '9/16', maxHeight: '60vh' }}>
+                    <video src={post.image_url} controls playsInline className="w-full h-full object-cover" />
+                  </div>
                 )}
 
                 <div className="p-4">
