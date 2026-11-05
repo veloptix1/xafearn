@@ -60,8 +60,8 @@ export default function ReseauPage() {
     const { data: topPosts } = await supabase.from('posts').select('user_id, total_coins_received, profiles(full_name)').order('total_coins_received', { ascending: false }).limit(20)
     const uniqueCreators = new Map()
     topPosts?.forEach(p => {
-      if (!uniqueCreators.has(p.user_id) && p.profiles?.full_name) {
-        uniqueCreators.set(p.user_id, { id: p.user_id, name: p.profiles.full_name, coins: p.total_coins_received })
+      if (!uniqueCreators.has(p.user_id) && (p.profiles as any)?.full_name) {
+        uniqueCreators.set(p.user_id, { id: p.user_id, name: (p.profiles as any).full_name, coins: p.total_coins_received })
       }
     })
     setTrending(Array.from(uniqueCreators.values()).slice(0, 5))
