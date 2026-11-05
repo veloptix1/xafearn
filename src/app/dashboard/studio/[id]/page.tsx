@@ -90,7 +90,7 @@ export default function SeriesEditorPage() {
     const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET
 
     if (!cloudName || !uploadPreset) {
-      throw new Error('Configuration Cloudinary manquante. Vérifie .env.local et Vercel.')
+      throw new Error('Configuration Cloudinary manquante.')
     }
 
     const formData = new FormData()
@@ -129,15 +129,15 @@ export default function SeriesEditorPage() {
       let mediaUrl = null
 
       if (series.content_type !== 'text' && epMedia) {
-        // Vérification de la durée (2 min max)
+        // 🚀 VÉRIFICATION DE LA DURÉE (Maintenant 59 minutes = 3540 secondes)
         if (series.content_type === 'video') {
           await new Promise((resolve, reject) => {
             const video = document.createElement('video')
             video.preload = 'metadata'
             video.onloadedmetadata = () => {
               window.URL.revokeObjectURL(video.src)
-              if (video.duration > 120) {
-                reject(new Error('La vidéo ne doit pas dépasser 2 minutes.'))
+              if (video.duration > 3540) { // 3540 secondes = 59 minutes
+                reject(new Error('La vidéo ne doit pas dépasser 59 minutes.'))
               } else {
                 resolve(true)
               }
@@ -148,11 +148,9 @@ export default function SeriesEditorPage() {
         }
 
         if (series.content_type === 'video') {
-          // 🚀 UTILISATION DE CLOUDINARY
           showToast('Compression et envoi de la vidéo...', 'success')
           mediaUrl = await uploadToCloudinary(epMedia)
         } else {
-          // Pour les images, on garde Supabase
           const ext = epMedia.name.split('.').pop() || 'jpg'
           const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
           
@@ -323,7 +321,7 @@ export default function SeriesEditorPage() {
                     />
                   </div>
                   {series.content_type === 'video' && (
-                    <p className="text-xs text-emerald-600 mt-2 font-medium">🚀 Compression automatique via Cloudinary (Max 2 min).</p>
+                    <p className="text-xs text-emerald-600 mt-2 font-medium">🚀 Compression automatique via Cloudinary (Max 59 min).</p>
                   )}
                 </div>
               )}
