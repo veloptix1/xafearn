@@ -1,4 +1,5 @@
 import { WithdrawalAdminSection } from '../EmailComponents'
+
 export default function AdminWithdrawalsPage() {
   return (
     <div>
