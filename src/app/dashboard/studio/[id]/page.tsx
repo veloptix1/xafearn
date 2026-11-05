@@ -16,6 +16,9 @@ export default function SeriesEditorPage() {
   const [episodes, setEpisodes] = useState<any[]>([])
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
+  const [isEditSeriesOpen, setIsEditSeriesOpen] = useState(false)
+  const [editTitle, setEditTitle] = useState('')
+  const [editDescription, setEditDescription] = useState('')
 
   // Formulaire d'épisode
   const [epTitle, setEpTitle] = useState('')
@@ -33,6 +36,8 @@ export default function SeriesEditorPage() {
     const { data: s } = await supabase.from('series').select('*').eq('id', seriesId).single()
     if (!s || s.creator_id !== user.id) return router.push('/dashboard/studio')
     setSeries(s)
+    setEditTitle(s.title)
+    setEditDescription(s.description || '')
 
     const { data: e } = await supabase.from('episodes').select('*').eq('series_id', seriesId).order('episode_number', { ascending: true })
     setEpisodes(e || [])
@@ -44,14 +49,40 @@ export default function SeriesEditorPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  const handleSaveSeries = async () => {
+    const { error } = await supabase.from('series').update({ title: editTitle, description: editDescription }).eq('id', seriesId)
+    if (error) showToast('Erreur : ' + error.message, 'error')
+    else {
+      showToast('Série modifiée !', 'success')
+      setIsEditSeriesOpen(false)
+      load()
+    }
+  }
+
+  const handleDeleteSeries = async () => {
+    if (!confirm('Supprimer DÉFINITIVEMENT cette série et tous ses épisodes ?')) return
+    const { error } = await supabase.from('series').delete().eq('id', seriesId)
+    if (error) showToast('Erreur : ' + error.message, 'error')
+    else router.push('/dashboard/studio')
+  }
+
+  const handleDeleteEpisode = async (ep: any) => {
+    if (!confirm(`Supprimer l'épisode ${ep.episode_number} ?`)) return
+    const { error } = await supabase.from('episodes').delete().eq('id', ep.id)
+    if (error) showToast('Erreur : ' + error.message, 'error')
+    else {
+      showToast('Épisode supprimé.', 'success')
+      load()
+    }
+  }
+
   const handleAddEpisode = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsUploading(true)
-
     const nextNumber = episodes.length + 1
-    const isFree = nextNumber <= 4 // 4 premiers gratuits obligatoires
+    const isFree = nextNumber <= 4
 
-    if (epPrice < 3 || epPrice > 500) {
+    if (!isFree && (epPrice < 3 || epPrice > 500)) {
       showToast('Le prix doit être entre 3 et 500 jetons.', 'error')
       setIsUploading(false)
       return
@@ -59,9 +90,7 @@ export default function SeriesEditorPage() {
 
     try {
       let mediaUrl = null
-      
       if (series.content_type !== 'text' && epMedia) {
-        // Vérifier la durée si c'est une vidéo
         if (series.content_type === 'video') {
           const video = document.createElement('video')
           video.preload = 'metadata'
@@ -74,7 +103,6 @@ export default function SeriesEditorPage() {
             video.src = URL.createObjectURL(epMedia!)
           })
         }
-
         const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${series.content_type === 'video' ? 'mp4' : 'jpg'}`
         const { error: upErr } = await supabase.storage.from('campaign-images').upload(fileName, epMedia)
         if (upErr) throw upErr
@@ -93,8 +121,7 @@ export default function SeriesEditorPage() {
       })
 
       if (error) throw error
-
-      showToast(`Épisode ${nextNumber} ajouté ${isFree ? '(GRATUIT)' : `(payant - ${epPrice} jetons)`} !`, 'success')
+      showToast(`Épisode ${nextNumber} ajouté !`, 'success')
       setIsAddOpen(false)
       setEpTitle(''); setEpText(''); setEpMedia(null); setEpPrice(10)
       load()
@@ -128,29 +155,28 @@ export default function SeriesEditorPage() {
 
       <div className="p-4 md:p-8 max-w-2xl mx-auto mt-4">
         
-        {/* Carte série */}
-        <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 flex gap-4 items-center shadow-sm">
-          {series.cover_url ? (
-            <img src={series.cover_url} className="w-20 h-20 rounded-xl object-cover" />
-          ) : (
-            <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-3xl">📖</div>
-          )}
-          <div className="flex-1">
-            <h2 className="font-black text-slate-900">{series.title}</h2>
-            <p className="text-xs text-slate-500">{series.content_type} • {series.is_published ? 'Publiée' : 'Brouillon'}</p>
-            <p className="text-xs text-amber-600 font-bold mt-1">🪙 {series.total_earnings || 0} gagnés</p>
+        {/* Carte série avec boutons Modifier/Supprimer */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 mb-6 shadow-sm">
+          <div className="flex gap-4 items-center mb-3">
+            {series.cover_url ? (
+              <img src={series.cover_url} className="w-20 h-20 rounded-xl object-cover" />
+            ) : (
+              <div className="w-20 h-20 bg-slate-100 rounded-xl flex items-center justify-center text-3xl">📖</div>
+            )}
+            <div className="flex-1">
+              <h2 className="font-black text-slate-900">{series.title}</h2>
+              <p className="text-xs text-slate-500">{series.content_type} • {series.is_published ? 'Publiée' : 'Brouillon'}</p>
+              <p className="text-xs text-amber-600 font-bold mt-1">🪙 {series.total_earnings || 0} gagnés</p>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Link 
-              href={`/series/${seriesId}`} 
-              target="_blank" 
-              className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold"
-            >
-              Voir
-            </Link>
+
+          <div className="flex flex-wrap gap-2">
+            <Link href={`/series/${seriesId}`} target="_blank" className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold">Voir</Link>
+            <button onClick={() => setIsEditSeriesOpen(true)} className="px-3 py-2 bg-slate-100 text-slate-700 rounded-lg text-xs font-bold">Modifier</button>
             <button onClick={handleTogglePublish} className={`px-3 py-2 rounded-lg text-xs font-bold ${series.is_published ? 'bg-slate-100 text-slate-600' : 'bg-emerald-500 text-white'}`}>
               {series.is_published ? 'Dépublier' : 'Publier'}
             </button>
+            <button onClick={handleDeleteSeries} className="px-3 py-2 bg-red-50 text-red-600 border border-red-200 rounded-lg text-xs font-bold ml-auto">Supprimer la série</button>
           </div>
         </div>
 
@@ -158,27 +184,41 @@ export default function SeriesEditorPage() {
         <h3 className="font-bold text-slate-900 mb-3">Épisodes ({episodes.length})</h3>
         
         {episodes.length === 0 ? (
-          <div className="bg-white p-8 rounded-2xl text-center text-slate-500 text-sm">Aucun épisode. Clique sur "+ Épisode" pour commencer.</div>
+          <div className="bg-white p-8 rounded-2xl text-center text-slate-500 text-sm">Aucun épisode.</div>
         ) : (
           <div className="space-y-2">
             {episodes.map((ep: any) => (
               <div key={ep.id} className="bg-white border border-slate-200 rounded-xl p-4 flex justify-between items-center">
-                <div>
-                  <p className="font-bold text-slate-900 text-sm">
-                    Ép. {ep.episode_number} : {ep.title}
-                  </p>
-                  <p className="text-xs text-slate-500">
-                    {ep.is_free ? '🎁 Gratuit' : `🪙 ${ep.price_in_coins} jetons`}
-                  </p>
+                <div className="flex-1">
+                  <p className="font-bold text-slate-900 text-sm">Ép. {ep.episode_number} : {ep.title}</p>
+                  <p className="text-xs text-slate-500">{ep.is_free ? '🎁 Gratuit' : `🪙 ${ep.price_in_coins} jetons`}</p>
                 </div>
-                {ep.episode_number <= 4 && (
-                  <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">OBLIGATOIRE GRATUIT</span>
-                )}
+                <div className="flex gap-2 items-center">
+                  {ep.episode_number <= 4 && (
+                    <span className="bg-emerald-50 text-emerald-700 text-[10px] font-bold px-2 py-1 rounded">GRATUIT</span>
+                  )}
+                  <button onClick={() => handleDeleteEpisode(ep)} className="px-2 py-1 bg-red-50 text-red-600 text-xs font-bold rounded-lg">Suppr.</button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Modal de modification de série */}
+      {isEditSeriesOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl w-full max-w-md p-6">
+            <h2 className="font-bold text-lg mb-4">Modifier la série</h2>
+            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3" />
+            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none mb-3" />
+            <div className="flex gap-2">
+              <button onClick={() => setIsEditSeriesOpen(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
+              <button onClick={handleSaveSeries} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl text-sm">Enregistrer</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal d'ajout d'épisode */}
       {isAddOpen && (
@@ -188,7 +228,7 @@ export default function SeriesEditorPage() {
             
             {episodes.length < 4 && (
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-4 text-xs text-emerald-800 font-medium">
-                🎁 Cet épisode sera GRATUIT (les 4 premiers sont obligatoirement gratuits).
+                🎁 Cet épisode sera GRATUIT (les 4 premiers sont obligatoires).
               </div>
             )}
 
@@ -202,9 +242,7 @@ export default function SeriesEditorPage() {
                   <div className="border-2 border-dashed border-slate-200 rounded-xl p-3 text-center">
                     <input type="file" accept={series.content_type === 'video' ? 'video/*' : 'image/*'} onChange={e => setEpMedia(e.target.files?.[0] || null)} className="w-full text-xs" />
                   </div>
-                  {series.content_type === 'video' && (
-                    <p className="text-xs text-amber-600 mt-2">⚠️ Vidéo max 2 minutes pour les comptes créateurs.</p>
-                  )}
+                  {series.content_type === 'video' && <p className="text-xs text-amber-600 mt-2">⚠️ Max 2 minutes.</p>}
                 </div>
               )}
 
