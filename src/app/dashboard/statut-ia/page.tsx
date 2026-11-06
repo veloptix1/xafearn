@@ -15,15 +15,24 @@ const LOADING_MESSAGES = [
 const VIEWS_COUNT = 1000
 const PRICE_PER_VIEW = 1.92
 const BUDGET = VIEWS_COUNT * PRICE_PER_VIEW
-const AI_CREDIT_COST = 1
+
+// SVG pour chaque template
+const TEMPLATE_ICONS = {
+  elegant: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>,
+  flash: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>,
+  pro: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>,
+  luxe: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  fun: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  minimal: <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" /></svg>,
+}
 
 const TEMPLATES = [
-  { id: 'elegant', name: 'Élégant', emoji: '✨', premium: false, color: 'from-purple-500 to-pink-500' },
-  { id: 'flash', name: 'Flash', emoji: '⚡', premium: false, color: 'from-amber-500 to-orange-500' },
-  { id: 'pro', name: 'Pro', emoji: '💼', premium: false, color: 'from-slate-700 to-slate-900' },
-  { id: 'luxe', name: 'Luxe', emoji: '👑', premium: true, color: 'from-yellow-500 to-amber-700' },
-  { id: 'fun', name: 'Fun', emoji: '🎉', premium: true, color: 'from-pink-500 to-rose-500' },
-  { id: 'minimal', name: 'Minimal', emoji: '⚪', premium: true, color: 'from-slate-400 to-slate-600' },
+  { id: 'elegant', name: 'Élégant', premium: false, color: 'from-purple-500 to-pink-500' },
+  { id: 'flash', name: 'Flash', premium: false, color: 'from-amber-500 to-orange-500' },
+  { id: 'pro', name: 'Pro', premium: false, color: 'from-slate-700 to-slate-900' },
+  { id: 'luxe', name: 'Luxe', premium: true, color: 'from-yellow-500 to-amber-700' },
+  { id: 'fun', name: 'Fun', premium: true, color: 'from-pink-500 to-rose-500' },
+  { id: 'minimal', name: 'Minimal', premium: true, color: 'from-slate-400 to-slate-600' },
 ]
 
 export default function StatutIAPage() {
@@ -82,7 +91,6 @@ export default function StatutIAPage() {
     e.preventDefault()
     if (!profile) return
 
-    // Vérifier les crédits IA
     if ((profile.ai_credits || 0) <= 0) {
       return showToast('Plus de crédits IA. Achète un pack pour continuer.', 'error')
     }
@@ -91,7 +99,6 @@ export default function StatutIAPage() {
     setResult(null)
 
     try {
-      // Déduire un crédit IA
       const { data: creditData, error: creditError } = await supabase.rpc('use_ai_credit', { p_user_id: profile.id })
       if (creditError) throw creditError
       if (!creditData.success) throw new Error(creditData.error)
@@ -109,7 +116,6 @@ export default function StatutIAPage() {
       
       if (!res.ok) throw new Error(data.error || 'Erreur génération')
 
-      // Sauvegarder dans l'historique
       const { data: savedGen } = await supabase.from('ai_generations').insert({
         user_id: profile.id,
         product,
@@ -120,7 +126,7 @@ export default function StatutIAPage() {
       }).select().single()
 
       setResult({ text: data.text, image: data.image, id: savedGen?.id })
-      showToast('Visuel généré !', 'success')
+      showToast('Visuel généré avec succès !', 'success')
     } catch (err: any) {
       showToast(err.message, 'error')
     }
@@ -130,7 +136,7 @@ export default function StatutIAPage() {
   const copyText = () => {
     if (result) {
       navigator.clipboard.writeText(result.text)
-      showToast('Texte copié !', 'success')
+      showToast('Texte copié dans le presse-papiers !', 'success')
     }
   }
 
@@ -175,7 +181,6 @@ export default function StatutIAPage() {
         balance: (profile.balance || 0) - BUDGET
       }).eq('id', profile.id)
 
-      // Marquer comme utilisée
       if (result.id) {
         await supabase.from('ai_generations').update({ used_in_campaign: true }).eq('id', result.id)
       }
@@ -193,20 +198,23 @@ export default function StatutIAPage() {
   const hasCredits = (profile?.ai_credits || 0) > 0
 
   if (loading) return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-      <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin"></div>
+    <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
+      <div className="w-8 h-8 border-4 border-indigo-200 border-t-indigo-500 rounded-full animate-spin mb-4"></div>
+      <p className="text-slate-500 font-medium text-sm">Chargement...</p>
     </div>
   )
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
       {toast && (
-        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-xl shadow-xl text-sm font-bold max-w-[90%] ${
-          toast.type === 'success' ? 'bg-emerald-500 text-white' : 
-          toast.type === 'error' ? 'bg-red-500 text-white' : 
-          'bg-sky-500 text-white'
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-5 py-3 rounded-xl shadow-xl text-white text-sm font-bold flex items-center gap-2 max-w-[90%] ${
+          toast.type === 'success' ? 'bg-emerald-500' : 
+          toast.type === 'error' ? 'bg-red-500' : 
+          'bg-sky-500'
         }`}>
-          {toast.message}
+          {toast.type === 'success' && <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>}
+          {toast.type === 'error' && <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>}
+          <span>{toast.message}</span>
         </div>
       )}
 
@@ -217,7 +225,7 @@ export default function StatutIAPage() {
           </Link>
           <h1 className="text-lg font-black text-slate-900">Studio IA</h1>
         </div>
-        <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold">
+        <button onClick={() => setShowHistory(!showHistory)} className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 text-slate-600 rounded-xl text-xs font-bold active:bg-slate-200 transition">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
           Historique
         </button>
@@ -225,46 +233,65 @@ export default function StatutIAPage() {
 
       <div className="p-4 max-w-lg mx-auto mt-2 space-y-4">
         
-        {/* Crédits IA */}
+        {/* Crédits et Solde */}
         <div className="grid grid-cols-2 gap-3">
           <div className={`p-4 rounded-2xl text-center border-2 ${hasCredits ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${hasCredits ? 'bg-emerald-100 text-emerald-600' : 'bg-red-100 text-red-600'}`}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            </div>
             <p className="text-[10px] font-bold uppercase text-slate-500">Crédits IA</p>
             <p className={`text-2xl font-black ${hasCredits ? 'text-emerald-600' : 'text-red-600'}`}>{profile?.ai_credits || 0}</p>
           </div>
           <div className={`p-4 rounded-2xl text-center border-2 ${canAfford ? 'bg-sky-50 border-sky-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`w-8 h-8 rounded-lg mx-auto mb-2 flex items-center justify-center ${canAfford ? 'bg-sky-100 text-sky-600' : 'bg-red-100 text-red-600'}`}>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+            </div>
             <p className="text-[10px] font-bold uppercase text-slate-500">Solde</p>
             <p className={`text-2xl font-black ${canAfford ? 'text-sky-600' : 'text-red-600'}`}>{(profile?.balance || 0).toLocaleString('fr-FR')} F</p>
           </div>
         </div>
 
-        {/* Si plus de crédits, proposer achat */}
         {!hasCredits && (
-          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 text-white text-center shadow-lg">
-            <p className="font-bold text-sm mb-1">🎁 Plus de crédits IA</p>
-            <p className="text-xs text-amber-100 mb-3">Achète un pack pour continuer à générer</p>
-            <Link href="/dashboard/jetons/acheter" className="inline-block px-4 py-2 bg-white text-amber-600 text-xs font-bold rounded-xl">
-              Acheter des crédits
-            </Link>
+          <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-4 text-white text-center shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full blur-2xl transform translate-x-8 -translate-y-8"></div>
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-2">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+              </div>
+              <p className="font-bold text-sm mb-1">Plus de crédits IA</p>
+              <p className="text-xs text-amber-100 mb-3">Achète un pack pour continuer à générer tes visuels</p>
+              <Link href="/dashboard/credits-ia/acheter" className="inline-block px-4 py-2 bg-white text-amber-600 text-xs font-bold rounded-xl active:scale-95 transition">
+                Acheter des crédits
+              </Link>
+            </div>
           </div>
         )}
 
         {/* Historique */}
         {showHistory && history.length > 0 && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4">
-            <h3 className="font-bold text-sm mb-3">Historique ({history.length})</h3>
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <h3 className="font-bold text-sm mb-3 flex items-center gap-2">
+              <svg className="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              Historique ({history.length})
+            </h3>
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {history.map(h => (
                 <button 
                   key={h.id}
                   onClick={() => { setResult({ text: h.generated_text, image: h.generated_image, id: h.id }); setShowHistory(false) }}
-                  className="w-full flex items-center gap-3 p-2 rounded-xl active:bg-slate-50 text-left"
+                  className="w-full flex items-center gap-3 p-2 rounded-xl active:bg-slate-50 text-left transition"
                 >
                   <img src={h.generated_image} className="w-12 h-12 rounded-lg object-cover shrink-0" alt="" />
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-slate-900 truncate">{h.product}</p>
                     <p className="text-[10px] text-slate-500">{new Date(h.created_at).toLocaleDateString('fr-FR')}</p>
                   </div>
-                  {h.used_in_campaign && <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded">Utilisée</span>}
+                  {h.used_in_campaign && (
+                    <span className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-1 rounded flex items-center gap-1">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                      Utilisée
+                    </span>
+                  )}
                 </button>
               ))}
             </div>
@@ -311,11 +338,17 @@ export default function StatutIAPage() {
                       key={t.id} 
                       type="button" 
                       onClick={() => !t.premium && setSelectedTemplate(t.id)}
-                      className={`p-2 rounded-lg text-center transition relative ${selectedTemplate === t.id ? 'ring-2 ring-white bg-white/20' : 'bg-black/20'} ${t.premium ? 'opacity-60' : ''}`}
+                      className={`p-2 rounded-lg text-center transition relative flex flex-col items-center gap-1 ${
+                        selectedTemplate === t.id ? 'ring-2 ring-white bg-white/20' : 'bg-black/20'
+                      } ${t.premium ? 'opacity-60' : ''}`}
                     >
-                      <div className="text-lg mb-0.5">{t.emoji}</div>
+                      <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${t.color} flex items-center justify-center text-white`}>
+                        {TEMPLATE_ICONS[t.id as keyof typeof TEMPLATE_ICONS]}
+                      </div>
                       <p className="text-[9px] font-bold">{t.name}</p>
-                      {t.premium && <span className="absolute top-1 right-1 text-[7px] bg-amber-400 text-amber-900 px-1 rounded">PRO</span>}
+                      {t.premium && (
+                        <span className="absolute top-1 right-1 text-[7px] bg-amber-400 text-amber-900 px-1 rounded font-black">PRO</span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -323,9 +356,15 @@ export default function StatutIAPage() {
 
               <button type="submit" disabled={generating || !hasCredits} className="w-full py-3.5 bg-white text-indigo-700 font-black rounded-xl active:scale-95 transition disabled:opacity-50 flex justify-center items-center gap-2 shadow-lg">
                 {generating ? (
-                  <><div className="w-4 h-4 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div> {loadingMsg}</>
+                  <>
+                    <div className="w-4 h-4 border-2 border-indigo-700 border-t-transparent rounded-full animate-spin"></div>
+                    {loadingMsg}
+                  </>
                 ) : (
-                  <>✨ Générer (1 crédit)</>
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                    Générer (1 crédit)
+                  </>
                 )}
               </button>
             </form>
@@ -337,12 +376,16 @@ export default function StatutIAPage() {
           <div className="bg-white rounded-3xl shadow-xl overflow-hidden border border-slate-200">
             <div className="relative h-56 w-full">
               <img src={result.image} alt="Visuel IA" className="w-full h-full object-cover" />
-              <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-md">
-                ✨ Généré par IA
+              <div className="absolute top-3 left-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white text-[10px] font-bold px-3 py-1.5 rounded-full shadow-md flex items-center gap-1">
+                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /></svg>
+                Généré par IA
               </div>
             </div>
             <div className="p-5">
-              <h3 className="font-black text-slate-900 text-base mb-3">Prêt à publier !</h3>
+              <h3 className="font-black text-slate-900 text-base mb-3 flex items-center gap-2">
+                <svg className="w-5 h-5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                Prêt à publier !
+              </h3>
               
               <div className="bg-slate-50 p-3 rounded-xl text-xs text-slate-700 whitespace-pre-wrap font-medium mb-3 border border-slate-200 h-32 overflow-y-auto">
                 {result.text}
@@ -351,14 +394,16 @@ export default function StatutIAPage() {
               <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl mb-3 text-center">
                 <p className="text-[10px] font-bold text-amber-700 uppercase">Coût de la campagne</p>
                 <p className="text-lg font-black text-amber-600">{BUDGET.toLocaleString('fr-FR')} FCFA</p>
-                <p className="text-[9px] text-amber-600">{VIEWS_COUNT} vues</p>
+                <p className="text-[9px] text-amber-600">{VIEWS_COUNT} vues × {PRICE_PER_VIEW} F</p>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-3">
-                <button onClick={copyText} className="py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl active:scale-95 transition">
+                <button onClick={copyText} className="py-2.5 bg-slate-900 text-white font-bold text-xs rounded-xl active:scale-95 transition flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
                   Copier
                 </button>
-                <a href={result.image} target="_blank" download="statut-ia.jpg" className="py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl active:scale-95 transition text-center">
+                <a href={result.image} target="_blank" download="statut-ia.jpg" className="py-2.5 bg-slate-100 text-slate-700 font-bold text-xs rounded-xl active:scale-95 transition text-center flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
                   Télécharger
                 </a>
               </div>
@@ -366,9 +411,21 @@ export default function StatutIAPage() {
               <button 
                 onClick={saveAsCampaign} 
                 disabled={saving || !canAfford} 
-                className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-sm rounded-xl active:scale-95 transition disabled:opacity-50 shadow-md"
+                className="w-full py-3.5 bg-gradient-to-r from-emerald-500 to-teal-500 text-white font-bold text-sm rounded-xl active:scale-95 transition disabled:opacity-50 shadow-md flex items-center justify-center gap-2"
               >
-                {saving ? 'Création...' : canAfford ? `Payer ${BUDGET.toLocaleString('fr-FR')} F et publier` : 'Solde insuffisant'}
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                    Création...
+                  </>
+                ) : canAfford ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    Payer {BUDGET.toLocaleString('fr-FR')} F et publier
+                  </>
+                ) : (
+                  'Solde insuffisant'
+                )}
               </button>
             </div>
           </div>
