@@ -2,68 +2,73 @@ import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const { product, city, price } = await req.json()
+    const { product, city, price, trackingLink, template } = await req.json()
 
-    if (!product || !city) {
-      return NextResponse.json({ error: 'Produit et ville requis' }, { status: 400 })
+    if (!product) {
+      return NextResponse.json({ error: 'Produit requis.' }, { status: 400 })
     }
 
-    // 1. Demander à Groq de générer le texte ET un prompt d'image ULTRA structuré
-    const prompt = `Tu es un expert en marketing digital et en génération d'images par IA.
-Je vends ce produit : "${product}". La cible est à ${city}. ${price ? `Le prix est de ${price} FCFA.` : ''}
+    const falKey = process.env.FAL_KEY
+    if (!falKey) {
+      return NextResponse.json({ error: 'Clé fal.ai manquante sur le serveur.' }, { status: 500 })
+    }
 
-Fais deux choses :
-1. Génère un texte de statut WhatsApp très vendeur en français (max 350 caractères) avec des emojis, un titre en majuscules, et termine par [LIEN_TRACKING].
-2. Génère un prompt en ANGLAIS pour une IA d'image (Pollinations Flux). Ce prompt doit être extrêmement descriptif et suivre EXACTEMENT cette structure :
-   [SUBJECT] + [DETAILS] + [LIGHTING] + [STYLE] + [TECHNICAL]
-   Exemple : "A luxurious modern villa in Yaoundé, large glass windows, infinity pool, golden hour lighting, architectural photography, 8k, photorealistic, no text, no humans"
-   Sois très précis sur le produit pour éviter les hallucinations. Ajoute TOUJOURS "no text, no humans" à la fin.
+    // 🎨 Prompt optimisé pour FLUX.1 Schnell
+    const styleMap: Record<string, string> = {
+      elegant: 'elegant luxury advertising poster, purple and gold colors, sophisticated',
+      flash: 'energetic flash sale poster, bright yellow and orange colors, dynamic',
+      pro: 'professional business advertising, dark blue and white, clean modern',
+      luxe: 'premium luxury product photography, dark background, gold accents',
+      fun: 'colorful fun advertising, bright pink and blue, playful modern',
+      minimal: 'minimalist clean advertising, white background, simple elegant',
+    }
 
-Réponds EXACTEMENT dans ce format JSON :
-{
-  "text": "le texte de vente ici",
-  "imagePrompt": "the detailed english image prompt here"
-}`
+    const style = styleMap[template || 'elegant'] || styleMap.elegant
+    
+    const prompt = `Professional advertising poster for "${product}" in ${city}, ${style} style, high quality commercial photography, beautiful product showcase, vibrant colors, clean composition, no text, no watermark, photorealistic, 4k, vertical 9:16 format`
 
-    const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    // 🚀 Appel à fal.ai avec FLUX.1 Schnell
+    const response = await fetch('https://fal.run/fal-ai/flux/schnell', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${process.env.GROQ_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Authorization': `Key ${falKey}`,
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'openai/gpt-oss-20b',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.7,
-        response_format: { type: "json_object" }
-      })
+        prompt: prompt,
+        image_size: 'portrait_16_9', // Format vertical pour statut WhatsApp
+        num_inference_steps: 4, // Schnell est rapide (4 étapes)
+        num_images: 1,
+        enable_safety_checker: true,
+        output_format: 'jpeg',
+      }),
     })
 
-    if (!groqRes.ok) {
-      throw new Error('Erreur de génération de texte')
+    if (!response.ok) {
+      const errText = await response.text()
+      console.error('Erreur fal.ai:', errText)
+      return NextResponse.json({ error: 'Erreur génération image: ' + errText }, { status: 500 })
     }
 
-    const groqData = await groqRes.json()
-    let content = groqData.choices[0].message.content.trim()
-    content = content.replace(/```json/g, '').replace(/```/g, '').trim()
-    const parsed = JSON.parse(content)
-
-    // 2. Générer l'image avec Pollinations (optimisé)
-    const finalPrompt = parsed.imagePrompt
+    const data = await response.json()
     
-    // On ajoute enhance=true pour que Pollinations améliore le prompt
-    // On ajoute un seed aléatoire pour éviter le cache
-    const seed = Math.floor(Math.random() * 1000000)
-    const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=1024&height=768&nologo=true&model=flux&enhance=true&seed=${seed}`
+    // Extraire l'URL de l'image
+    const imageUrl = data.images?.[0]?.url
+    
+    if (!imageUrl) {
+      console.error('Pas d\'image dans la réponse:', JSON.stringify(data).substring(0, 500))
+      return NextResponse.json({ error: 'Aucune image générée.' }, { status: 500 })
+    }
+
+    // Texte de la pub (pour le statut WhatsApp)
+    const adText = `🔥 ${product} à ${city} !\n\n💰 Prix : ${price} FCFA\n\n📲 Contacte-nous vite : ${trackingLink}\n\n#${product.replace(/\s/g, '')} #${city.replace(/\s/g, '')} #Promo`
 
     return NextResponse.json({ 
-      success: true, 
-      text: parsed.text, 
-      image: imageUrl 
+      image: imageUrl,
+      text: adText 
     })
-
-  } catch (error: any) {
-    console.error('AI Error:', error)
-    return NextResponse.json({ error: 'Erreur lors de la génération. Réessaie.' }, { status: 500 })
+  } catch (err: any) {
+    console.error('Erreur API generate:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
