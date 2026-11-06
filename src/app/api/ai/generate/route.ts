@@ -8,11 +8,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Produit requis.' }, { status: 400 })
     }
 
-    const hfToken = process.env.HF_TOKEN
-    if (!hfToken) {
-      return NextResponse.json({ error: 'Token Hugging Face manquant.' }, { status: 500 })
-    }
-
+    // 🎨 Prompt optimisé
     const styleMap: Record<string, string> = {
       elegant: 'elegant luxury advertising poster, purple and gold colors, sophisticated',
       flash: 'energetic flash sale poster, bright yellow and orange colors, dynamic',
@@ -24,24 +20,23 @@ export async function POST(req: Request) {
     const style = styleMap[template || 'elegant'] || styleMap.elegant
     const prompt = `Professional advertising poster for "${product}" in ${city}, ${style} style, high quality commercial photography, vibrant colors, no text, photorealistic, 4k`
 
-    // 🚀 SEUL MODÈLE SUPPORTÉ GRATUITEMENT PAR HF-INFERENCE
-    const response = await fetch(
-      'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${hfToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ inputs: prompt }),
-      }
-    )
+    // 🆓 Utilise le modèle flux (gratuit) avec ta clé API
+    const apiKey = process.env.POLLINATIONS_API_KEY
+    const seed = Math.floor(Math.random() * 1000000)
+    
+    // Construction de l'URL avec la clé (si disponible)
+    let url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=768&height=1344&seed=${seed}&model=flux&nologo=true`
+    if (apiKey) {
+      url += `&token=${apiKey}`
+    }
+
+    const response = await fetch(url)
 
     if (!response.ok) {
       const errText = await response.text()
-      console.error('Erreur HF:', response.status, errText)
+      console.error('Erreur Pollinations:', response.status, errText)
       return NextResponse.json({ 
-        error: `Erreur Hugging Face (${response.status}): ${errText.substring(0, 200)}` 
+        error: `Erreur Pollinations (${response.status}): ${errText.substring(0, 200)}` 
       }, { status: 500 })
     }
 
