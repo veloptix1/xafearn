@@ -258,7 +258,7 @@ export function AdminUserRow({ user }: { user: any }) {
 }
 
 // ==========================================
-// EMAIL
+// EMAIL - AVEC VRAI ENVOI
 // ==========================================
 export function EmailForm({ users }: { users: any[] }) {
   const [selectedTemplate, setSelectedTemplate] = useState('custom')
@@ -277,7 +277,7 @@ export function EmailForm({ users }: { users: any[] }) {
 
   const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 3500)
+    setTimeout(() => setToast(null), 4000)
   }
 
   const handleTemplateChange = (key: string) => {
@@ -289,11 +289,40 @@ export function EmailForm({ users }: { users: any[] }) {
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!subject || !message) return showToast('Sujet et message requis.', 'error')
+    
     setIsSending(true)
-    await new Promise(r => setTimeout(r, 1500))
-    setIsSending(false)
-    showToast('Email envoyé !', 'success')
-    setSubject(''); setMessage(''); setSelectedTemplate('custom')
+
+    try {
+      // 🚀 VRAI ENVOI VIA L'API
+      const res = await fetch('/api/send-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedUser === 'all' ? 'all' : users.find(u => u.id === selectedUser)?.email,
+          subject,
+          message,
+          users: selectedUser === 'all' ? users.map(u => u.email) : null
+        })
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Erreur d\'envoi')
+      }
+
+      if (data.sent !== undefined) {
+        showToast(`${data.sent} email(s) envoyé(s) avec succès !`, 'success')
+      } else {
+        showToast('Email envoyé !', 'success')
+      }
+
+      setSubject(''); setMessage(''); setSelectedTemplate('custom')
+    } catch (err: any) {
+      showToast('Erreur : ' + err.message, 'error')
+    } finally {
+      setIsSending(false)
+    }
   }
 
   return (
@@ -325,7 +354,7 @@ export function EmailForm({ users }: { users: any[] }) {
         <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6} className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white resize-none" placeholder="Message..." required />
       </div>
       <button type="submit" disabled={isSending} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-md">
-        {isSending ? 'Envoi...' : 'Envoyer l\'email'}
+        {isSending ? 'Envoi en cours...' : 'Envoyer l\'email'}
       </button>
     </form>
   )
