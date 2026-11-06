@@ -22,7 +22,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 4000)
   }
 
-  // 🔄 Recharger la soumission
   useEffect(() => {
     async function refresh() {
       const { data } = await supabase.from('ad_submissions').select('*').eq('campaign_id', campaign.id).eq('user_id', userId).maybeSingle()
@@ -31,28 +30,28 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     refresh()
   }, [campaign.id, userId, submission])
 
-  // 🚀 ÉTAPE 1 : "J'ai publié" → Créer la soumission SANS vidéo et fermer le modal
+  // 🚀 ÉTAPE 1 : "J'ai publié" → Enregistre la soumission avec statut 'en_attente_proof'
   const handlePublishedClick = async () => {
     try {
       const { data, error } = await supabase.from('ad_submissions').insert({
         campaign_id: campaign.id,
         user_id: userId,
         tracking_id: Math.random().toString(36).substring(2, 10),
-        status: 'pending',
+        status: 'en_attente_proof', // 🚀 Statut intermédiaire, sans vidéo
       }).select().single()
 
       if (error) throw error
 
       setLocalSubmission(data)
-      setIsOpen(false) // On ferme le modal
-      showToast('Publication enregistrée ! Tu peux maintenant envoyer ta preuve.', 'success')
+      setIsOpen(false)
+      showToast('Publication enregistrée ! Envoie maintenant ta preuve.', 'success')
       router.refresh()
     } catch (err: any) {
       showToast('Erreur : ' + err.message, 'error')
     }
   }
 
-  // 🚀 ÉTAPE 2 : Ouvrir le modal d'upload (seulement au clic sur "Vérifier & Envoyer")
+  // 🚀 ÉTAPE 2 : Ouvrir le modal d'upload
   const handleOpenUpload = () => {
     setStep('upload')
     setIsOpen(true)
@@ -60,7 +59,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setConfirmed(false)
   }
 
-  // 🚀 ÉTAPE 3 : Envoyer la preuve
+  // 🚀 ÉTAPE 3 : Envoyer la preuve → Mise à jour avec la vidéo et statut 'pending'
   const handleUploadProof = async () => {
     if (!confirmed) return showToast('Tu dois confirmer que ton statut a au moins 18h.', 'warning')
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
@@ -98,6 +97,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const state = !localSubmission ? 'not_published' : 
                 localSubmission.status === 'validated' ? 'validated' :
                 localSubmission.status === 'rejected' ? 'rejected' :
+                localSubmission.status === 'en_attente_proof' ? 'ready_to_prove' :
                 localSubmission.proof_video_url ? 'pending' : 'ready_to_prove'
 
   // ✅ VALIDÉ
@@ -148,7 +148,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 PRÊT À ENVOYER LA PREUVE (soumission créée sans vidéo)
+  // 🟢 PRÊT À ENVOYER LA PREUVE (statut en_attente_proof)
   if (state === 'ready_to_prove') {
     return (
       <>
