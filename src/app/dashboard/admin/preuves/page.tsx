@@ -79,17 +79,27 @@ export default function AdminPreuvesPage() {
     }
   }
 
-  // 🚀 SUPPRESSION DÉFINITIVE
+  // 🚀 SUPPRESSION CORRIGÉE
   const handleDelete = async (sub: any) => {
     if (!confirm('Supprimer définitivement cette preuve ? La vidéo sera aussi effacée.')) return
     setActionLoading(sub.id)
     try {
+      // 1. Supprimer la vidéo via l'API Storage (autorisé)
+      if (sub.proof_video_url) {
+        const fileName = sub.proof_video_url.split('/').pop()
+        if (fileName) {
+          await supabase.storage.from('proof-videos').remove([fileName])
+        }
+      }
+
+      // 2. Supprimer la ligne en SQL
       const { data, error } = await supabase.rpc('admin_delete_submission', {
         p_submission_id: sub.id,
         p_admin_id: profile.id
       })
       if (error) throw error
       if (!data.success) throw new Error(data.error)
+
       showToast('Preuve supprimée.', 'success')
       setSubmissions(prev => prev.filter(s => s.id !== sub.id))
     } catch (err: any) {
