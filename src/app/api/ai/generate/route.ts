@@ -8,57 +8,62 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Produit requis.' }, { status: 400 })
     }
 
-    const falKey = process.env.FAL_KEY
-    if (!falKey) {
-      return NextResponse.json({ error: 'Clé fal.ai manquante sur le serveur.' }, { status: 500 })
+    const hfToken = process.env.HF_TOKEN
+    if (!hfToken) {
+      return NextResponse.json({ error: 'Token Hugging Face manquant sur le serveur.' }, { status: 500 })
     }
 
-    // 🎨 Prompt optimisé pour FLUX.1 Schnell
+    // 🎨 Prompt optimisé pour FLUX.1
     const styleMap: Record<string, string> = {
-      elegant: 'elegant luxury advertising poster, purple and gold colors, sophisticated',
-      flash: 'energetic flash sale poster, bright yellow and orange colors, dynamic',
-      pro: 'professional business advertising, dark blue and white, clean modern',
-      luxe: 'premium luxury product photography, dark background, gold accents',
-      fun: 'colorful fun advertising, bright pink and blue, playful modern',
-      minimal: 'minimalist clean advertising, white background, simple elegant',
+      elegant: 'elegant luxury advertising poster, purple and gold colors, sophisticated, high-end',
+      flash: 'energetic flash sale poster, bright yellow and orange colors, dynamic, urgent',
+      pro: 'professional business advertising, dark blue and white, clean modern, corporate',
+      luxe: 'premium luxury product photography, dark background, gold accents, exclusive',
+      fun: 'colorful fun advertising, bright pink and blue, playful modern, youthful',
+      minimal: 'minimalist clean advertising, white background, simple elegant, refined',
     }
 
     const style = styleMap[template || 'elegant'] || styleMap.elegant
     
     const prompt = `Professional advertising poster for "${product}" in ${city}, ${style} style, high quality commercial photography, beautiful product showcase, vibrant colors, clean composition, no text, no watermark, photorealistic, 4k, vertical 9:16 format`
 
-    // 🚀 Appel à fal.ai avec FLUX.1 Schnell
-    const response = await fetch('https://fal.run/fal-ai/flux/schnell', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Key ${falKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt: prompt,
-        image_size: 'portrait_16_9', // Format vertical pour statut WhatsApp
-        num_inference_steps: 4, // Schnell est rapide (4 étapes)
-        num_images: 1,
-        enable_safety_checker: true,
-        output_format: 'jpeg',
-      }),
-    })
+    // 🚀 Appel à Hugging Face avec FLUX.1-schnell
+    const response = await fetch(
+      'https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-schnell',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${hfToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          inputs: prompt,
+          parameters: {
+            width: 768,
+            height: 1344, // Format vertical 9:16
+          }
+        }),
+      }
+    )
 
     if (!response.ok) {
       const errText = await response.text()
-      console.error('Erreur fal.ai:', errText)
-      return NextResponse.json({ error: 'Erreur génération image: ' + errText }, { status: 500 })
+      console.error('Erreur Hugging Face:', errText)
+      
+      // Si le modèle est en train de charger, on attend et on réessaie
+      if (response.status === 503) {
+        return NextResponse.json({ 
+          error: 'Le modèle IA est en cours de chargement. Réessaie dans 30 secondes.' 
+        }, { status: 503 })
+      }
+      
+      return NextResponse.json({ error: 'Erreur génération: ' + errText }, { status: 500 })
     }
 
-    const data = await response.json()
-    
-    // Extraire l'URL de l'image
-    const imageUrl = data.images?.[0]?.url
-    
-    if (!imageUrl) {
-      console.error('Pas d\'image dans la réponse:', JSON.stringify(data).substring(0, 500))
-      return NextResponse.json({ error: 'Aucune image générée.' }, { status: 500 })
-    }
+    // Hugging Face renvoie directement l'image en binaire
+    const imageBuffer = await response.arrayBuffer()
+    const base64Image = Buffer.from(imageBuffer).toString('base64')
+    const imageUrl = `data:image/jpeg;base64,${base64Image}`
 
     // Texte de la pub (pour le statut WhatsApp)
     const adText = `🔥 ${product} à ${city} !\n\n💰 Prix : ${price} FCFA\n\n📲 Contacte-nous vite : ${trackingLink}\n\n#${product.replace(/\s/g, '')} #${city.replace(/\s/g, '')} #Promo`
