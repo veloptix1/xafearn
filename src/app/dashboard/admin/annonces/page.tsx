@@ -2,169 +2,99 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Toast from '@/components/Toast'
 
-export default function AdminAnnoncesPage() {
+export default function AdminCampaignsPage() {
   const supabase = createClient()
   const router = useRouter()
   const [campaigns, setCampaigns] = useState<any[]>([])
-  const [users, setUsers] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [profile, setProfile] = useState<any>(null)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
-  const [editingCampaign, setEditingCampaign] = useState<any>(null)
-  const [editTitle, setEditTitle] = useState('')
-  const [editDescription, setEditDescription] = useState('')
 
-  useEffect(() => { load() }, [])
-
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push('/login')
-    
-    const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    if (!profile || (profile.role !== 'admin' && !profile.is_admin)) return router.push('/dashboard')
-    
-    const { data: c } = await supabase.from('campaigns').select('*').order('created_at', { ascending: false })
-    const { data: u } = await supabase.from('profiles').select('*')
-    
-    setCampaigns(c || [])
-    setUsers(u || [])
-    setLoading(false)
-  }
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (message: string, type: 'success' | 'error') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 3000)
+    setTimeout(() => setToast(null), 3500)
   }
 
-  const updateStatus = async (id: string, newStatus: string, label: string) => {
-    setActionLoading(id)
-    const { error } = await supabase.from('campaigns').update({ status: newStatus }).eq('id', id)
-    if (error) {
-      showToast('Erreur : ' + error.message, 'error')
-    } else {
-      showToast(`Campagne ${label} avec succès !`, 'success')
-      setCampaigns(campaigns.map(c => c.id === id ? { ...c, status: newStatus } : c))
+  useEffect(() => {
+    async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return router.push('/login')
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      if (!prof || (prof.role !== 'admin' && !prof.is_admin)) return router.push('/dashboard')
+      setProfile(prof)
+
+      const { data } = await supabase.from('campaigns').select('*, profiles(full_name, email)').order('created_at', { ascending: false })
+      setCampaigns(data || [])
+      setLoading(false)
     }
+    load()
+  }, [router, supabase])
+
+  const handleProcess = async (id: string, action: 'approve' | 'reject') => {
+    setActionLoading(id)
+    try {
+      const { data, error } = await supabase.rpc('admin_process_campaign', { p_campaign_id: id, p_admin_id: profile.id, p_action: action })
+      if (error) throw error
+      if (!data.success) throw new Error(data.error)
+      showToast(action === 'approve' ? 'Campagne approuvée.' : 'Campagne rejetée.', 'success')
+      router.refresh()
+    } catch (err: any) { showToast(err.message, 'error') }
     setActionLoading(null)
   }
 
-  // 🚀 FONCTION DE SUPPRESSION CORRIGÉE
-  const deleteCampaign = async (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!confirm('Supprimer définitivement cette campagne ?')) return
     setActionLoading(id)
-    
-    const { error } = await supabase.from('campaigns').delete().eq('id', id)
-    
-    if (error) {
-      showToast('Erreur : ' + error.message, 'error')
-    } else {
-      showToast('Campagne supprimée !', 'success')
-      // On retire la campagne de l'affichage local immédiatement
+    try {
+      const { data, error } = await supabase.rpc('admin_delete_campaign', { p_campaign_id: id, p_admin_id: profile.id })
+      if (error) throw error
+      if (!data.success) throw new Error(data.error)
+      showToast('Campagne supprimée.', 'success')
       setCampaigns(prev => prev.filter(c => c.id !== id))
-    }
+    } catch (err: any) { showToast(err.message, 'error') }
     setActionLoading(null)
   }
 
-  const saveEdit = async () => {
-    if (!editingCampaign) return
-    setActionLoading(editingCampaign.id)
-    const { error } = await supabase.from('campaigns').update({
-      title: editTitle,
-      description: editDescription
-    }).eq('id', editingCampaign.id)
-    
-    if (error) {
-      showToast('Erreur : ' + error.message, 'error')
-    } else {
-      showToast('Campagne modifiée !', 'success')
-      setCampaigns(campaigns.map(c => c.id === editingCampaign.id ? { ...c, title: editTitle, description: editDescription } : c))
-      setEditingCampaign(null)
-    }
-    setActionLoading(null)
-  }
-
-  if (loading) return <div className="text-center py-20 text-slate-500">Chargement...</div>
-
-  const usersMap = new Map(users.map(u => [u.id, u]))
+  if (loading) return <div className="p-20 text-center text-slate-500">Chargement...</div>
 
   return (
-    <div className="space-y-4">
+    <main className="p-4 md:p-6 max-w-5xl mx-auto">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      <h1 className="text-2xl font-black text-slate-900 mb-1">Campagnes</h1>
+      <p className="text-sm text-slate-500 mb-6">{campaigns.length} au total</p>
 
-      <h2 className="text-xl font-black text-slate-900">📢 Modération des campagnes ({campaigns.length})</h2>
-
-      {campaigns.length === 0 ? (
-        <div className="bg-white border border-slate-200 p-8 rounded-2xl text-center text-slate-500">Aucune campagne.</div>
-      ) : (
-        campaigns.map((c: any) => (
-          <div key={c.id} className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 hover:shadow-md transition">
-            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-              {c.image_url && <img src={c.image_url} className="w-20 h-20 object-cover rounded-xl shadow-sm" alt={c.title} />}
-              <div className="flex-1">
-                <h3 className="font-bold text-slate-900">{c.title}</h3>
-                <p className="text-xs text-slate-500">Par {usersMap.get(c.user_id)?.full_name || 'Inconnu'}</p>
-                <p className="text-xs text-slate-400 mt-1">Budget : {c.budget} F • Vues : {c.views_purchased}</p>
+      <div className="space-y-3">
+        {campaigns.map(c => (
+          <div key={c.id} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex gap-3">
+              {c.image_url && <img src={c.image_url} className="w-16 h-16 rounded-lg object-cover shrink-0" alt="" />}
+              <div className="flex-1 min-w-0">
+                <div className="flex justify-between items-start gap-2 mb-1">
+                  <h3 className="font-bold text-slate-900 text-sm truncate">{c.title}</h3>
+                  <span className={`text-[9px] font-bold px-2 py-1 rounded uppercase shrink-0 ${c.status === 'active' ? 'bg-emerald-100 text-emerald-700' : c.status === 'pending' ? 'bg-amber-100 text-amber-700' : c.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-600'}`}>
+                    {c.status}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 truncate">{c.profiles?.full_name} • {c.budget} F</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">{new Date(c.created_at).toLocaleDateString('fr-FR')}</p>
               </div>
-              <span className={`px-3 py-1 rounded-full text-[10px] font-bold uppercase ${
-                c.status === 'active' ? 'bg-emerald-100 text-emerald-700' :
-                c.status === 'pending' ? 'bg-amber-100 text-amber-700' :
-                c.status === 'paused' ? 'bg-slate-100 text-slate-700' :
-                'bg-red-100 text-red-700'
-              }`}>{c.status}</span>
             </div>
-
-            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-100">
+            <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
               {c.status === 'pending' && (
-                <button onClick={() => updateStatus(c.id, 'active', 'approuvée')} disabled={actionLoading === c.id} className="px-4 py-2 bg-emerald-500 text-white font-bold text-xs rounded-lg hover:bg-emerald-400 disabled:opacity-50">
-                  {actionLoading === c.id ? '...' : 'Approuver'}
-                </button>
+                <>
+                  <button onClick={() => handleProcess(c.id, 'reject')} disabled={actionLoading === c.id} className="flex-1 py-2 bg-red-50 text-red-600 border border-red-200 font-bold text-xs rounded-lg disabled:opacity-50">Rejeter</button>
+                  <button onClick={() => handleProcess(c.id, 'approve')} disabled={actionLoading === c.id} className="flex-1 py-2 bg-emerald-500 text-white font-bold text-xs rounded-lg disabled:opacity-50">Approuver</button>
+                </>
               )}
-              {c.status === 'active' && (
-                <button onClick={() => updateStatus(c.id, 'paused', 'mise en pause')} disabled={actionLoading === c.id} className="px-4 py-2 bg-amber-500 text-white font-bold text-xs rounded-lg hover:bg-amber-400 disabled:opacity-50">
-                  {actionLoading === c.id ? '...' : 'Mettre en pause'}
-                </button>
-              )}
-              {c.status === 'paused' && (
-                <button onClick={() => updateStatus(c.id, 'active', 'reprise')} disabled={actionLoading === c.id} className="px-4 py-2 bg-emerald-500 text-white font-bold text-xs rounded-lg hover:bg-emerald-400 disabled:opacity-50">
-                  {actionLoading === c.id ? '...' : 'Reprendre'}
-                </button>
-              )}
-              {c.status !== 'rejected' && c.status !== 'pending' && (
-                <button onClick={() => updateStatus(c.id, 'rejected', 'rejetée')} disabled={actionLoading === c.id} className="px-4 py-2 bg-red-50 text-red-600 border border-red-200 font-bold text-xs rounded-lg">
-                  Rejeter
-                </button>
-              )}
-              <button onClick={() => { setEditingCampaign(c); setEditTitle(c.title); setEditDescription(c.description) }} className="px-4 py-2 bg-sky-50 text-sky-600 border border-sky-200 font-bold text-xs rounded-lg">
-                Modifier
-              </button>
-              <button onClick={() => deleteCampaign(c.id)} disabled={actionLoading === c.id} className="px-4 py-2 bg-red-100 text-red-700 font-bold text-xs rounded-lg ml-auto hover:bg-red-200 transition">
-                Supprimer
-              </button>
+              <button onClick={() => handleDelete(c.id)} disabled={actionLoading === c.id} className="px-3 py-2 bg-slate-100 text-slate-600 font-bold text-xs rounded-lg disabled:opacity-50">Supprimer</button>
             </div>
           </div>
-        ))
-      )}
-
-      {/* Modal de modification */}
-      {editingCampaign && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl w-full max-w-md p-6">
-            <h3 className="font-bold text-lg mb-4">Modifier la campagne</h3>
-            <input type="text" value={editTitle} onChange={e => setEditTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Titre" />
-            <textarea value={editDescription} onChange={e => setEditDescription(e.target.value)} rows={4} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm mb-3 resize-none focus:outline-none focus:ring-2 focus:ring-sky-500" placeholder="Description" />
-            <div className="flex gap-2">
-              <button onClick={() => setEditingCampaign(null)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
-              <button onClick={saveEdit} disabled={actionLoading === editingCampaign.id} className="flex-1 py-3 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
-                {actionLoading === editingCampaign.id ? '...' : 'Enregistrer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+        ))}
+      </div>
+    </main>
   )
 }
