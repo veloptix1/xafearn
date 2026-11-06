@@ -13,7 +13,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Token Hugging Face manquant.' }, { status: 500 })
     }
 
-    // 🎨 Prompt optimisé pour Stable Diffusion
     const styleMap: Record<string, string> = {
       elegant: 'elegant luxury advertising poster, purple and gold colors, sophisticated',
       flash: 'energetic flash sale poster, bright yellow and orange colors, dynamic',
@@ -25,9 +24,9 @@ export async function POST(req: Request) {
     const style = styleMap[template || 'elegant'] || styleMap.elegant
     const prompt = `Professional advertising poster for "${product}" in ${city}, ${style} style, high quality commercial photography, vibrant colors, no text, photorealistic, 4k`
 
-    // 🚀 Utilise Stable Diffusion 2.1 (toujours supporté gratuitement)
+    // 🚀 NOUVELLE URL : router.huggingface.co (l'ancienne est morte)
     const response = await fetch(
-      'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-2-1',
+      'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2-1',
       {
         method: 'POST',
         headers: {
