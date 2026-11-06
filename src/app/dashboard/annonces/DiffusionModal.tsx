@@ -22,7 +22,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setTimeout(() => setToast(null), 4000)
   }
 
-  // Rafraîchir la soumission quand elle change
   useEffect(() => {
     async function refresh() {
       const { data } = await supabase.from('ad_submissions').select('*').eq('campaign_id', campaign.id).eq('user_id', userId).maybeSingle()
@@ -31,7 +30,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     refresh()
   }, [campaign.id, userId, submission])
 
-  // 🚀 ÉTAPE 1 : "J'ai publié" → Créer la soumission SANS vidéo et fermer
+  // 🚀 ÉTAPE 1 : "J'ai publié" → Créer la soumission sans vidéo
   const handlePublishedClick = async () => {
     try {
       const { data, error } = await supabase.from('ad_submissions').insert({
@@ -52,7 +51,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     }
   }
 
-  // 🚀 ÉTAPE 2 : Ouvrir le modal d'upload
+  // 🚀 ÉTAPE 2 : Ouvrir modal d'upload
   const handleOpenUpload = () => {
     setStep('upload')
     setIsOpen(true)
@@ -75,6 +74,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
+      // Mettre à jour la soumission existante
       const { data, error } = await supabase.from('ad_submissions').update({
         proof_video_url: publicUrl,
         proof_type: 'video',
@@ -96,6 +96,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   // 🎨 CALCUL DE L'ÉTAT
   const state = !localSubmission ? 'not_published' : 
                 localSubmission.status === 'validated' ? 'validated' :
+                localSubmission.status === 'rejected' ? 'rejected' :
                 localSubmission.proof_video_url ? 'pending' : 'ready_to_prove'
 
   // ✅ VALIDÉ
@@ -105,6 +106,78 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
         Validé & Payé
       </div>
+    )
+  }
+
+  // ❌ REJETÉ
+  if (state === 'rejected') {
+    return (
+      <>
+        <button 
+          onClick={handleOpenUpload} 
+          className="w-full py-3 text-sm font-bold rounded-xl bg-red-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
+          Preuve rejetée - Recommencer
+        </button>
+
+        {isOpen && step === 'upload' && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+              {toast && (
+                <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-lg text-white text-sm font-bold ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
+                  {toast.message}
+                </div>
+              )}
+
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="font-bold text-lg">Nouvelle preuve</h2>
+                <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-4">
+                <div className="flex gap-3">
+                  <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                  <div>
+                    <p className="text-sm font-bold text-red-800 mb-1">Preuve rejetée</p>
+                    <p className="text-xs text-red-700 leading-relaxed">
+                      Ta preuve précédente a été rejetée. Assure-toi que ton statut a bien été publié il y a 18h+ et envoie une nouvelle vidéo.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer mb-4">
+                <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-amber-500 rounded shrink-0" />
+                <span className="text-xs text-amber-900 leading-relaxed font-medium">
+                  Je valide que j'ai posté mon statut <strong>il y a au moins 18h</strong>.
+                </span>
+              </label>
+
+              <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative mb-4">
+                <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                {videoFile ? (
+                  <div>
+                    <p className="text-sm text-emerald-600 font-bold">Vidéo prête</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{Math.round(videoFile.size / 1024 / 1024)} MB</p>
+                  </div>
+                ) : (
+                  <div>
+                    <svg className="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                    <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
+                  </div>
+                )}
+              </div>
+
+              <button onClick={handleUploadProof} disabled={uploading || !confirmed || !videoFile} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 active:scale-95 transition shadow-md">
+                {uploading ? 'Envoi en cours...' : 'Envoyer ma nouvelle preuve'}
+              </button>
+            </div>
+          </div>
+        )}
+      </>
     )
   }
 
@@ -118,7 +191,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 PRÊT À ENVOYER LA PREUVE
+  // 🟢 PRÊT À ENVOYER LA PREUVE (a cliqué sur "J'ai publié" mais pas encore envoyé de vidéo)
   if (state === 'ready_to_prove') {
     return (
       <>
