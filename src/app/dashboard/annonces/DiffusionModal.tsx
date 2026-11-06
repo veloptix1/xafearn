@@ -8,196 +8,174 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [isOpen, setIsOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'warning' } | null>(null)
   
-  // États du cooldown
-  const [isCooldown, setIsCooldown] = useState(false)
-  const [cooldownTimeLeft, setCooldownTimeLeft] = useState('')
-
-  const [trackingId] = useState(() => Math.random().toString(36).substring(2, 10))
-  const trackingUrl = typeof window !== 'undefined' ? `${window.location.origin}/track/${trackingId}` : ''
-  const messageText = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 Contactez-nous ici : ${trackingUrl}`
-
+  const [step, setStep] = useState<'details' | 'upload'>('details')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
+  
   const supabase = createClient()
   const router = useRouter()
 
   const showToast = (msg: string, type: 'success' | 'error' | 'warning' = 'error') => {
     setToast({ message: msg, type })
-    setTimeout(() => setToast(null), 3500)
+    setTimeout(() => setToast(null), 4000)
   }
 
-  // 🔍 VÉRIFICATION DU COOLDOWN
+  // 🧮 CALCUL DES ÉTATS
+  const [state, setState] = useState<'not_published' | 'cooldown' | 'ready_to_prove' | 'pending' | 'validated'>('not_published')
+  const [cooldownTimeLeft, setCooldownTimeLeft] = useState('')
+
   useEffect(() => {
-    if (!submission || !submission.last_publish_date) {
-      setIsCooldown(false)
+    if (!submission) {
+      setState('not_published')
       return
     }
-
-    const lastPublish = new Date(submission.last_publish_date)
+    
+    if (submission.status === 'validated') {
+      setState('validated')
+      return
+    }
+    
+    if (submission.proof_video_url) {
+      setState('pending')
+      return
+    }
+    
+    // Pas encore de preuve, mais l'utilisateur a déjà cliqué sur "J'ai publié"
+    const createdAt = new Date(submission.created_at)
     const now = new Date()
-
     const isSameDay = 
-      lastPublish.getDate() === now.getDate() &&
-      lastPublish.getMonth() === now.getMonth() &&
-      lastPublish.getFullYear() === now.getFullYear()
+      createdAt.getDate() === now.getDate() &&
+      createdAt.getMonth() === now.getMonth() &&
+      createdAt.getFullYear() === now.getFullYear()
 
-    // Si on est le même jour ET qu'il n'est pas encore 18h → BLOQUÉ
     if (isSameDay && now.getHours() < 18) {
-      setIsCooldown(true)
-      
+      setState('cooldown')
       const nextRelease = new Date(now)
       nextRelease.setHours(18, 0, 0, 0)
-      
       const timeDiff = nextRelease.getTime() - now.getTime()
       const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
       const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
-
       setCooldownTimeLeft(`Reviens après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
     } else {
-      setIsCooldown(false)
+      setState('ready_to_prove')
     }
   }, [submission])
 
-  // 🚀 ÉTAPE 1 : L'utilisateur clique sur "J'ai publié" (BLOQUE LE BOUTON)
+  // 🚀 ÉTAPE 1 : Cliquer sur "J'ai publié"
   const handlePublishedClick = async () => {
-    const now = new Date()
-    
-    // On enregistre la date de publication (bloque pour aujourd'hui)
-    if (submission) {
-      await supabase.from('ad_submissions').update({ last_publish_date: now.toISOString() }).eq('id', submission.id)
-    } else {
-      await supabase.from('ad_submissions').insert({
+    try {
+      // Créer la soumission avec un statut "pending"
+      const { error } = await supabase.from('ad_submissions').insert({
         campaign_id: campaign.id,
         user_id: userId,
-        tracking_id: trackingId,
-        status: 'pending', // En attente
-        last_publish_date: now.toISOString()
+        tracking_id: Math.random().toString(36).substring(2, 10),
+        status: 'pending',
       })
+
+      if (error) throw error
+
+      showToast('Publication enregistrée !', 'success')
+      setIsOpen(false)
+      // On force le rechargement pour que le parent voie la nouvelle soumission
+      setTimeout(() => window.location.reload(), 1000)
+    } catch (err: any) {
+      showToast('Erreur : ' + err.message, 'error')
     }
-    
-    setIsCooldown(true)
-    
-    const nextRelease = new Date(now)
-    nextRelease.setHours(18, 0, 0, 0)
-    const timeDiff = nextRelease.getTime() - now.getTime()
-    const hoursLeft = Math.floor(timeDiff / (1000 * 60 * 60))
-    const minutesLeft = Math.floor((timeDiff % (1000 * 60 * 60)) / (1000 * 60))
-    setCooldownTimeLeft(`Reviens après 18h (dans ${hoursLeft}h ${minutesLeft}m)`)
-    
-    setIsOpen(false)
-    showToast('Publication enregistrée ! Reviens après 18h pour envoyer ta preuve.', 'success')
-    setTimeout(() => router.refresh(), 1000)
   }
 
-  // 🚀 ÉTAPE 2 : L'utilisateur envoie sa preuve (Après 18h)
-  const handleVerify = async () => {
+  // 🚀 ÉTAPE 2 : Envoyer la preuve (seulement si state === 'ready_to_prove')
+  const handleUploadProof = async () => {
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
-    if (videoFile.size > 50 * 1024 * 1024) return showToast('La vidéo ne doit pas dépasser 50 MB.', 'error')
-    if (!videoFile.type.startsWith('video/')) return showToast('Le fichier doit être une vidéo.', 'error')
+    if (videoFile.size > 50 * 1024 * 1024) return showToast('Max 50 MB.', 'error')
+    if (!videoFile.type.startsWith('video/')) return showToast('Doit être une vidéo.', 'error')
 
     setUploading(true)
-
     try {
+      // Upload de la vidéo
       const fileName = `proof-${userId}-${Date.now()}.mp4`
       const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, videoFile)
-      if (uploadError) throw new Error(uploadError.message)
+      if (uploadError) throw uploadError
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-      // On met à jour la soumission avec la preuve
-      await supabase.from('ad_submissions').update({
+      // Mettre à jour la soumission
+      const { error } = await supabase.from('ad_submissions').update({
         proof_video_url: publicUrl,
         proof_type: 'video',
-        status: 'pending' // En attente de validation admin
-      }).eq('campaign_id', campaign.id).eq('user_id', userId)
+        status: 'pending'
+      }).eq('id', submission.id)
 
-      await supabase.from('notifications').insert({
-        user_id: userId, 
-        title: 'Preuve envoyée ⏳',
-        message: `Ta preuve pour "${campaign.title}" est en cours de vérification.`,
-        link: '/dashboard/annonces'
-      })
+      if (error) throw error
 
-      setUploading(false)
-      setIsOpen(false)
       showToast('Preuve envoyée ! En attente de validation.', 'success')
-      setTimeout(() => router.refresh(), 1500)
-
+      setIsOpen(false)
+      setTimeout(() => window.location.reload(), 1000)
     } catch (err: any) {
       showToast('Erreur : ' + err.message, 'error')
-      setUploading(false)
     }
+    setUploading(false)
   }
 
-  const hasProof = !!submission?.proof_video_url
-  const isValidated = submission?.status === 'validated'
-  const isPending = submission?.status === 'pending' && hasProof
-
-  // ✅ ÉTAT FINAL : Validé par l'admin
-  if (isValidated) {
+  // 🎨 AFFICHAGE DES BOUTONS SELON L'ÉTAT
+  if (state === 'validated') {
     return (
-      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex justify-center items-center gap-2">
+      <div className="w-full py-3 text-sm font-bold rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex justify-center items-center gap-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
         Terminé & Payé
       </div>
     )
   }
 
-  // ⏳ ÉTAT : Preuve envoyée en attente
-  if (isPending) {
+  if (state === 'pending') {
     return (
-      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex justify-center items-center gap-2">
+      <div className="w-full py-3 text-sm font-bold rounded-xl bg-amber-50 text-amber-600 border border-amber-100 flex justify-center items-center gap-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         En attente de validation
       </div>
     )
   }
 
-  // ⏳ ÉTAT : Cooldown actif (Bouton bloqué)
-  if (isCooldown) {
+  if (state === 'cooldown') {
     return (
-      <div className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-100 text-slate-500 border border-slate-200 flex justify-center items-center gap-2 cursor-not-allowed">
+      <div className="w-full py-3 text-sm font-bold rounded-xl bg-slate-100 text-slate-500 border border-slate-200 flex justify-center items-center gap-2">
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         {cooldownTimeLeft}
       </div>
     )
   }
 
-  // 🟢 ÉTAT : Prêt à envoyer la preuve (Après 18h)
-  if (submission && submission.last_publish_date && !hasProof) {
+  if (state === 'ready_to_prove') {
     return (
       <>
-        <button onClick={() => setIsOpen(true)} className="w-full py-2.5 text-sm font-bold rounded-xl bg-sky-500 text-white hover:bg-sky-600 transition shadow-md flex justify-center items-center gap-2">
+        <button onClick={() => { setIsOpen(true); setStep('upload'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-sky-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-          Vérifier & Envoyer ma preuve
+          Envoyer ma preuve
         </button>
 
-        {isOpen && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-            {toast && (
-              <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white ${
-                toast.type === 'success' ? 'bg-emerald-500' : 
-                toast.type === 'error' ? 'bg-red-500' : 'bg-amber-500'
-              }`}>{toast.message}</div>
-            )}
-            <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
-              <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                <h2 className="font-bold text-slate-900">Envoyer la preuve</h2>
-                <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-900 bg-white rounded-full p-1 shadow-sm">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+        {isOpen && step === 'upload' && (
+          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl">
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="font-bold text-lg">Preuve de publication</h2>
+                <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-5 space-y-5">
-                <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl">
-                  <p className="text-sm font-bold text-amber-800 mb-2">Preuve de publication</p>
-                  <p className="text-xs text-amber-700 mb-3">Filme ton statut WhatsApp avec l'annonce visible et le nombre de vues.</p>
-                  <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="block w-full text-sm text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-amber-100 file:text-amber-700 hover:file:bg-amber-200" />
-                  {videoFile && <p className="text-xs text-emerald-600 font-bold mt-2">✅ Vidéo prête ({Math.round(videoFile.size / 1024 / 1024)} MB)</p>}
-                </div>
-                <button onClick={handleVerify} disabled={uploading || !videoFile} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl hover:bg-sky-400 disabled:opacity-50 transition">
-                  {uploading ? 'Envoi en cours...' : 'Envoyer ma preuve'}
-                </button>
+
+              <p className="text-xs text-slate-500 mb-4">Filme ton statut WhatsApp avec l'annonce visible.</p>
+
+              <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative mb-4">
+                <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                {videoFile ? (
+                  <p className="text-sm text-emerald-600 font-bold">Vidéo prête ({Math.round(videoFile.size / 1024 / 1024)} MB)</p>
+                ) : (
+                  <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
+                )}
               </div>
+
+              <button onClick={handleUploadProof} disabled={uploading || !videoFile} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50">
+                {uploading ? 'Envoi en cours...' : 'Envoyer ma preuve'}
+              </button>
             </div>
           </div>
         )}
@@ -205,36 +183,26 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 ÉTAT INITIAL : Diffuser l'annonce
+  // state === 'not_published' (par défaut)
   return (
     <>
-      <button onClick={() => setIsOpen(true)} className="w-full py-2.5 text-sm font-bold rounded-xl bg-slate-900 text-white hover:bg-slate-800 transition">
+      <button onClick={() => { setIsOpen(true); setStep('details'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
         Diffuser cette annonce
       </button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          
-          {toast && (
-            <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white ${
-              toast.type === 'success' ? 'bg-emerald-500' : 
-              toast.type === 'error' ? 'bg-red-500' : 'bg-amber-500'
-            }`}>
-              {toast.message}
-            </div>
-          )}
-
-          <div className="bg-white rounded-3xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h2 className="font-bold text-slate-900">Publier cette annonce</h2>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-slate-900 bg-white rounded-full p-1 shadow-sm">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+      {isOpen && step === 'details' && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="font-bold text-lg">Publier cette annonce</h2>
+              <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
               </button>
             </div>
 
-            <div className="p-5 overflow-y-auto space-y-5">
+            <div className="space-y-4">
               <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">1. Téléchargez l'image</p>
+                <p className="text-sm font-bold text-slate-900 mb-2">1. Télécharge l'image</p>
                 <button onClick={async () => {
                   const response = await fetch(campaign.image_url)
                   const blob = await response.blob()
@@ -244,21 +212,25 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                   link.download = `annonce.jpg`
                   link.click()
                   showToast('Image téléchargée !', 'success')
-                }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl hover:bg-slate-200 transition">
+                }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl active:bg-slate-200 transition">
                   Télécharger l'image
                 </button>
               </div>
+
               <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">2. Copiez le texte</p>
-                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">{messageText}</div>
+                <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le texte</p>
+                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
+                  {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\nContacte-nous ici : ${window.location.origin}/track/${Math.random().toString(36).substring(2, 10)}`}
+                </div>
                 <button onClick={async () => {
-                  await navigator.clipboard.writeText(messageText)
+                  await navigator.clipboard.writeText(`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\nContacte-nous ici : ${window.location.origin}/track/${Math.random().toString(36).substring(2, 10)}`)
                   showToast('Texte copié !', 'success')
-                }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl hover:bg-sky-100 transition">
+                }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
                   Copier le texte
                 </button>
               </div>
-              <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl hover:bg-emerald-400 transition">
+
+              <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
                 J'ai publié sur mon statut
               </button>
             </div>
