@@ -7,7 +7,6 @@ import { createClient } from '@/lib/supabase/client'
 export default function DiffusionModal({ campaign, userId, submission }: { campaign: any, userId: string, submission?: any }) {
   const [isOpen, setIsOpen] = useState(false)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'warning' } | null>(null)
-  
   const [step, setStep] = useState<'details' | 'upload'>('details')
   const [videoFile, setVideoFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
@@ -30,36 +29,14 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     refresh()
   }, [campaign.id, userId, submission])
 
-  // 🚀 ÉTAPE 1 : "J'ai publié" → Créer la soumission sans vidéo
-  const handlePublishedClick = async () => {
-    try {
-      const { data, error } = await supabase.from('ad_submissions').insert({
-        campaign_id: campaign.id,
-        user_id: userId,
-        tracking_id: Math.random().toString(36).substring(2, 10),
-        status: 'pending',
-      }).select().single()
-
-      if (error) throw error
-
-      setLocalSubmission(data)
-      showToast('Publication enregistrée ! Tu peux maintenant envoyer ta preuve.', 'success')
-      setIsOpen(false)
-      router.refresh()
-    } catch (err: any) {
-      showToast('Erreur : ' + err.message, 'error')
-    }
-  }
-
-  // 🚀 ÉTAPE 2 : Ouvrir modal d'upload
-  const handleOpenUpload = () => {
+  // 🚀 ÉTAPE 1 : "J'ai publié" → On passe DIRECTEMENT à l'upload, SANS créer en base
+  const handlePublishedClick = () => {
     setStep('upload')
-    setIsOpen(true)
     setVideoFile(null)
     setConfirmed(false)
   }
 
-  // 🚀 ÉTAPE 3 : Envoyer la preuve
+  // 🚀 ÉTAPE 2 : Envoyer la preuve → On crée la soumission ICI
   const handleUploadProof = async () => {
     if (!confirmed) return showToast('Tu dois confirmer que ton statut a au moins 18h.', 'warning')
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
@@ -68,22 +45,36 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
     setUploading(true)
     try {
+      // 1. Upload de la vidéo
       const fileName = `proof-${userId}-${Date.now()}.mp4`
       const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, videoFile)
       if (uploadError) throw uploadError
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-      // Mettre à jour la soumission existante
-      const { data, error } = await supabase.from('ad_submissions').update({
-        proof_video_url: publicUrl,
-        proof_type: 'video',
-        status: 'pending'
-      }).eq('id', localSubmission.id).select().single()
+      // 2. Si on a déjà une soumission rejetée, on la supprime d'abord
+      if (localSubmission && localSubmission.status === 'rejected') {
+        await supabase.rpc('reset_rejected_submission', {
+          p_submission_id: localSubmission.id,
+          p_user_id: userId
+        })
+      }
 
-      if (error) throw error
+      // 3. Créer la soumission avec la vidéo (via fonction RPC sécurisée)
+      const { data: rpcData, error: rpcError } = await supabase.rpc('create_submission_with_proof', {
+        p_campaign_id: campaign.id,
+        p_user_id: userId,
+        p_tracking_id: Math.random().toString(36).substring(2, 10),
+        p_proof_video_url: publicUrl
+      })
 
+      if (rpcError) throw rpcError
+      if (!rpcData.success) throw new Error(rpcData.error)
+
+      // 4. Recharger la soumission
+      const { data } = await supabase.from('ad_submissions').select('*').eq('id', rpcData.id).single()
       setLocalSubmission(data)
+
       showToast('Preuve envoyée ! En attente de validation.', 'success')
       setIsOpen(false)
       router.refresh()
@@ -97,7 +88,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const state = !localSubmission ? 'not_published' : 
                 localSubmission.status === 'validated' ? 'validated' :
                 localSubmission.status === 'rejected' ? 'rejected' :
-                localSubmission.proof_video_url ? 'pending' : 'ready_to_prove'
+                'pending'
 
   // ✅ VALIDÉ
   if (state === 'validated') {
@@ -113,10 +104,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   if (state === 'rejected') {
     return (
       <>
-        <button 
-          onClick={handleOpenUpload} 
-          className="w-full py-3 text-sm font-bold rounded-xl bg-red-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2"
-        >
+        <button onClick={() => { setIsOpen(true); setStep('upload'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-red-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           Preuve rejetée - Recommencer
         </button>
@@ -129,7 +117,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                   {toast.message}
                 </div>
               )}
-
               <div className="flex justify-between items-center mb-4">
                 <h2 className="font-bold text-lg">Nouvelle preuve</h2>
                 <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
@@ -138,15 +125,9 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
               </div>
 
               <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-4">
-                <div className="flex gap-3">
-                  <svg className="w-5 h-5 text-red-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <div>
-                    <p className="text-sm font-bold text-red-800 mb-1">Preuve rejetée</p>
-                    <p className="text-xs text-red-700 leading-relaxed">
-                      Ta preuve précédente a été rejetée. Assure-toi que ton statut a bien été publié il y a 18h+ et envoie une nouvelle vidéo.
-                    </p>
-                  </div>
-                </div>
+                <p className="text-xs text-red-700 leading-relaxed">
+                  Ta preuve précédente a été rejetée. Envoie une nouvelle vidéo.
+                </p>
               </div>
 
               <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer mb-4">
@@ -159,20 +140,14 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative mb-4">
                 <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 {videoFile ? (
-                  <div>
-                    <p className="text-sm text-emerald-600 font-bold">Vidéo prête</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{Math.round(videoFile.size / 1024 / 1024)} MB</p>
-                  </div>
+                  <p className="text-sm text-emerald-600 font-bold">Vidéo prête ({Math.round(videoFile.size / 1024 / 1024)} MB)</p>
                 ) : (
-                  <div>
-                    <svg className="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
-                  </div>
+                  <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
                 )}
               </div>
 
-              <button onClick={handleUploadProof} disabled={uploading || !confirmed || !videoFile} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 active:scale-95 transition shadow-md">
-                {uploading ? 'Envoi en cours...' : 'Envoyer ma nouvelle preuve'}
+              <button onClick={handleUploadProof} disabled={uploading || !confirmed || !videoFile} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition shadow-md">
+                {uploading ? 'Envoi...' : 'Envoyer ma nouvelle preuve'}
               </button>
             </div>
           </div>
@@ -191,86 +166,14 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 PRÊT À ENVOYER LA PREUVE (a cliqué sur "J'ai publié" mais pas encore envoyé de vidéo)
-  if (state === 'ready_to_prove') {
-    return (
-      <>
-        <button 
-          onClick={handleOpenUpload} 
-          className="w-full py-3 text-sm font-bold rounded-xl bg-sky-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-          Vérifier & Envoyer ma preuve
-        </button>
-
-        {isOpen && step === 'upload' && (
-          <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
-            <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
-              {toast && (
-                <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-lg text-white text-sm font-bold ${toast.type === 'success' ? 'bg-emerald-500' : 'bg-red-500'}`}>
-                  {toast.message}
-                </div>
-              )}
-
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-lg">Envoyer ma preuve</h2>
-                <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                </button>
-              </div>
-
-              <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
-                <div className="flex gap-3">
-                  <svg className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                  <div>
-                    <p className="text-sm font-bold text-blue-800 mb-1">Important</p>
-                    <p className="text-xs text-blue-700 leading-relaxed">
-                      Assure-toi que ton statut a été publié <strong>il y a au moins 18 heures</strong>.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer mb-4">
-                <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-amber-500 rounded shrink-0" />
-                <span className="text-xs text-amber-900 leading-relaxed font-medium">
-                  Je valide que j'ai posté mon statut <strong>il y a au moins 18h</strong>.
-                </span>
-              </label>
-
-              <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative mb-4">
-                <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                {videoFile ? (
-                  <div>
-                    <p className="text-sm text-emerald-600 font-bold">Vidéo prête</p>
-                    <p className="text-[10px] text-slate-400 mt-1">{Math.round(videoFile.size / 1024 / 1024)} MB</p>
-                  </div>
-                ) : (
-                  <div>
-                    <svg className="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                    <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
-                  </div>
-                )}
-              </div>
-
-              <button onClick={handleUploadProof} disabled={uploading || !confirmed || !videoFile} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 active:scale-95 transition shadow-md">
-                {uploading ? 'Envoi en cours...' : 'Envoyer ma preuve'}
-              </button>
-            </div>
-          </div>
-        )}
-      </>
-    )
-  }
-
   // 🔵 PAS ENCORE PUBLIÉ
   return (
     <>
-      <button onClick={() => { setIsOpen(true); setStep('details'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
+      <button onClick={() => { setIsOpen(true); setStep('details'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition">
         Diffuser cette annonce
       </button>
 
-      {isOpen && step === 'details' && (
+      {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             {toast && (
@@ -279,47 +182,88 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
               </div>
             )}
 
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="font-bold text-lg">Publier cette annonce</h2>
-              <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">1. Télécharge l'image</p>
-                <button onClick={async () => {
-                  const response = await fetch(campaign.image_url)
-                  const blob = await response.blob()
-                  const url = window.URL.createObjectURL(blob)
-                  const link = document.createElement('a')
-                  link.href = url
-                  link.download = `annonce.jpg`
-                  link.click()
-                  showToast('Image téléchargée !', 'success')
-                }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl active:bg-slate-200 transition">
-                  Télécharger l'image
-                </button>
-              </div>
-
-              <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le texte</p>
-                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
-                  {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`}
+            {step === 'details' && (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-bold text-lg">Publier cette annonce</h2>
+                  <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
                 </div>
-                <button onClick={async () => {
-                  await navigator.clipboard.writeText(`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`)
-                  showToast('Texte copié !', 'success')
-                }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
-                  Copier le texte
-                </button>
-              </div>
 
-              <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
-                J'ai publié sur mon statut
-              </button>
-            </div>
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 mb-2">1. Télécharge l'image</p>
+                    <button onClick={async () => {
+                      const response = await fetch(campaign.image_url)
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = `annonce.jpg`
+                      link.click()
+                      showToast('Image téléchargée !', 'success')
+                    }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl active:bg-slate-200 transition">
+                      Télécharger l'image
+                    </button>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le texte</p>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
+                      {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`}
+                    </div>
+                    <button onClick={async () => {
+                      await navigator.clipboard.writeText(`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`)
+                      showToast('Texte copié !', 'success')
+                    }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
+                      Copier le texte
+                    </button>
+                  </div>
+
+                  <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
+                    J'ai publié sur mon statut
+                  </button>
+                </div>
+              </>
+            )}
+
+            {step === 'upload' && (
+              <>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="font-bold text-lg">Envoyer ma preuve</h2>
+                  <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                  </button>
+                </div>
+
+                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl mb-4">
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    <strong>Important :</strong> ton statut doit avoir été publié il y a au moins 18h.
+                  </p>
+                </div>
+
+                <label className="flex items-start gap-3 p-3 bg-amber-50 border border-amber-200 rounded-xl cursor-pointer mb-4">
+                  <input type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} className="mt-0.5 w-5 h-5 accent-amber-500 rounded shrink-0" />
+                  <span className="text-xs text-amber-900 leading-relaxed font-medium">
+                    Je valide que j'ai posté mon statut <strong>il y a au moins 18h</strong>.
+                  </span>
+                </label>
+
+                <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative mb-4">
+                  <input type="file" accept="video/*" onChange={(e) => setVideoFile(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                  {videoFile ? (
+                    <p className="text-sm text-emerald-600 font-bold">Vidéo prête ({Math.round(videoFile.size / 1024 / 1024)} MB)</p>
+                  ) : (
+                    <p className="text-sm text-slate-500">Ajouter une vidéo (max 50 MB)</p>
+                  )}
+                </div>
+
+                <button onClick={handleUploadProof} disabled={uploading || !confirmed || !videoFile} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50 transition shadow-md">
+                  {uploading ? 'Envoi...' : 'Envoyer ma preuve'}
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
