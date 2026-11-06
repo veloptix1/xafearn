@@ -148,19 +148,26 @@ export function AdminUserRow({ user }: { user: any }) {
     setLoading(false)
   }
 
+  // 🚀 DÉFINIR LE SOLDE (remplace au lieu d'ajouter)
   const adjustBalance = async () => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.rpc('admin_adjust_balance', {
-        p_user_id: user.id, p_admin_id: adminProfile.id,
-        p_coins: parseInt(coins) || 0, p_fcfa: parseFloat(fcfa) || 0
-      })
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          coins_balance: parseInt(coins) || 0,
+          balance: parseFloat(fcfa) || 0
+        })
+        .eq('id', user.id)
+
       if (error) throw error
-      if (!data.success) throw new Error(data.error)
-      showToast('Solde ajusté.', 'success')
+      
+      showToast('Solde mis à jour.', 'success')
       setShowBalance(false)
       router.refresh()
-    } catch (err: any) { showToast(err.message, 'error') }
+    } catch (err: any) { 
+      showToast(err.message, 'error') 
+    }
     setLoading(false)
   }
 
@@ -192,7 +199,16 @@ export function AdminUserRow({ user }: { user: any }) {
         <td className="px-4 py-3 text-right">
           <div className="flex flex-wrap gap-1 justify-end">
             <button onClick={() => setShowDetails(true)} className="px-2 py-1.5 bg-slate-100 text-slate-700 text-[10px] font-bold rounded">Voir</button>
-            <button onClick={() => setShowBalance(true)} className="px-2 py-1.5 bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold rounded">Solde</button>
+            <button 
+              onClick={() => { 
+                setShowBalance(true); 
+                setCoins(String(user.coins_balance || 0)); 
+                setFcfa(String(user.balance || 0)); 
+              }} 
+              className="px-2 py-1.5 bg-amber-50 text-amber-600 border border-amber-200 text-[10px] font-bold rounded"
+            >
+              Solde
+            </button>
             <button onClick={toggleRole} disabled={loading} className="px-2 py-1.5 bg-sky-50 text-sky-600 border border-sky-200 text-[10px] font-bold rounded disabled:opacity-50">{user.role === 'admin' ? 'Retirer' : 'Admin'}</button>
             <button onClick={toggleBlock} disabled={loading} className={`px-2 py-1.5 text-[10px] font-bold rounded disabled:opacity-50 ${user.is_blocked ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{user.is_blocked ? 'Débloquer' : 'Bloquer'}</button>
             <button onClick={deleteUser} disabled={loading} className="px-2 py-1.5 bg-red-50 text-red-600 border border-red-200 text-[10px] font-bold rounded disabled:opacity-50">Suppr.</button>
@@ -233,20 +249,34 @@ export function AdminUserRow({ user }: { user: any }) {
           <td colSpan={4}>
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
               <div className="bg-white rounded-3xl w-full max-w-md p-6">
-                <h3 className="font-bold text-lg mb-4">Ajuster le solde de {user.full_name}</h3>
+                <h3 className="font-bold text-lg mb-2">Définir le solde de {user.full_name}</h3>
+                <p className="text-xs text-slate-500 mb-4">Actuel : {user.coins_balance || 0} 🪙 et {user.balance || 0} F</p>
+                
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Ajouter des jetons (+/-)</label>
-                    <input type="number" value={coins} onChange={e => setCoins(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nouveau solde en jetons</label>
+                    <input 
+                      type="number" 
+                      value={coins} 
+                      onChange={e => setCoins(e.target.value)} 
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" 
+                    />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Ajouter du FCFA (+/-)</label>
-                    <input type="number" value={fcfa} onChange={e => setFcfa(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" />
+                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Nouveau solde FCFA</label>
+                    <input 
+                      type="number" 
+                      value={fcfa} 
+                      onChange={e => setFcfa(e.target.value)} 
+                      className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm" 
+                    />
                   </div>
                 </div>
                 <div className="flex gap-2 mt-4">
                   <button onClick={() => setShowBalance(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
-                  <button onClick={adjustBalance} disabled={loading} className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50">Appliquer</button>
+                  <button onClick={adjustBalance} disabled={loading} className="flex-1 py-3 bg-emerald-500 text-white font-bold rounded-xl disabled:opacity-50">
+                    {loading ? '...' : 'Définir'}
+                  </button>
                 </div>
               </div>
             </div>
