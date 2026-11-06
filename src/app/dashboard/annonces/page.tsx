@@ -13,26 +13,34 @@ export default function AnnoncesPage() {
   const [profile, setProfile] = useState<any>(null)
   const [campaigns, setCampaigns] = useState<any[]>([])
   const [submissions, setSubmissions] = useState<any[]>([])
+  const [isInTestMode, setIsInTestMode] = useState(false)
 
   useEffect(() => {
-    async function load() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return router.push('/login')
-
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (!prof) return router.push('/login')
-      setProfile(prof)
-
-      const { data: c } = await supabase.from('campaigns').select('*').eq('status', 'active').order('created_at', { ascending: false })
-      setCampaigns(c || [])
-
-      const { data: s } = await supabase.from('ad_submissions').select('*').eq('user_id', user.id)
-      setSubmissions(s || [])
-
-      setLoading(false)
-    }
     load()
-  }, [router, supabase])
+  }, [])
+
+  async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return router.push('/login')
+
+    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    if (!prof) return router.push('/login')
+    setProfile(prof)
+
+    // 🚀 VÉRIFICATION CÔTÉ SERVEUR DU MODE TEST (débloque automatiquement si validé)
+    const { data: testMode } = await supabase.rpc('check_and_unlock_test_mode', { p_user_id: user.id })
+    setIsInTestMode(testMode === true)
+
+    // Charger les campagnes
+    const { data: c } = await supabase.from('campaigns').select('*').eq('status', 'active').order('created_at', { ascending: false })
+    setCampaigns(c || [])
+
+    // Charger les soumissions
+    const { data: s } = await supabase.from('ad_submissions').select('*').eq('user_id', user.id)
+    setSubmissions(s || [])
+
+    setLoading(false)
+  }
 
   if (loading) return (
     <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center">
@@ -43,9 +51,6 @@ export default function AnnoncesPage() {
 
   const level = profile?.level || 1
   const gainPerView = level === 1 ? 0.50 : level === 2 ? 1.25 : 1.75
-
-  const hasValidatedTest = submissions?.some(s => s.status === 'validated' && campaigns?.find(c => c.id === s.campaign_id)?.is_welcome_campaign)
-  const isInTestMode = profile?.is_test_mode === true && !hasValidatedTest
 
   const welcomeCampaign = campaigns?.find(c => c.is_welcome_campaign)
   const paidCampaigns = campaigns?.filter(c => !c.is_welcome_campaign) || []
@@ -67,6 +72,7 @@ export default function AnnoncesPage() {
 
       <div className="p-4 max-w-2xl mx-auto">
         
+        {/* 🚀 BANNIÈRE MODE TEST */}
         {isInTestMode && (
           <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl mb-5 flex gap-3">
             <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-amber-600 shrink-0">
@@ -74,7 +80,9 @@ export default function AnnoncesPage() {
             </div>
             <div>
               <h3 className="font-bold text-amber-800 text-sm">Mode Test Actif</h3>
-              <p className="text-amber-700 text-xs mt-1 leading-relaxed">Publie l'annonce recommandée ci-dessous pour débloquer les campagnes payantes.</p>
+              <p className="text-amber-700 text-xs mt-1 leading-relaxed">
+                Publie l'annonce recommandée ci-dessous et fais valider ta preuve pour débloquer les campagnes payantes.
+              </p>
             </div>
           </div>
         )}
@@ -89,6 +97,7 @@ export default function AnnoncesPage() {
         ) : (
           <div className="space-y-5">
             
+            {/* ANNONCE TEST (toujours visible si on est en mode test OU si elle est validée) */}
             {welcomeCampaign && (
               <div className="bg-white border-2 border-emerald-400 rounded-3xl shadow-md overflow-hidden flex flex-col">
                 {welcomeCampaign.image_url && (
@@ -119,6 +128,7 @@ export default function AnnoncesPage() {
               </div>
             )}
 
+            {/* CAMPAGNES PAYANTES */}
             {paidCampaigns.length > 0 && (
               <div className="relative mt-6">
                 <div className="flex items-center justify-between mb-3">
@@ -133,7 +143,7 @@ export default function AnnoncesPage() {
                     <div key={campaign.id} className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden flex flex-col">
                       {campaign.image_url && (
                         <div className="h-40 w-full bg-slate-100 relative">
-                          <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" />
+                          <img src={campaign.image_url} alt={campaign.title} className="w-full h-full object-cover" loading="lazy" />
                           <div className="absolute top-3 right-3 bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-lg text-[10px] font-bold text-slate-900 shadow-sm flex items-center gap-1">
                             <svg className="w-3 h-3 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
                             {campaign.views_purchased?.toLocaleString('fr-FR')} vues
