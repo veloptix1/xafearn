@@ -258,7 +258,7 @@ export function AdminUserRow({ user }: { user: any }) {
 }
 
 // ==========================================
-// EMAIL - AVEC VRAI ENVOI
+// EMAIL FORM - AVEC LOGS VISIBLES
 // ==========================================
 export function EmailForm({ users }: { users: any[] }) {
   const [selectedTemplate, setSelectedTemplate] = useState('custom')
@@ -266,7 +266,8 @@ export function EmailForm({ users }: { users: any[] }) {
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
   const [isSending, setIsSending] = useState(false)
-  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
+  const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null)
+  const [lastResult, setLastResult] = useState<string>('')
 
   const templates: Record<string, { subject: string, message: string }> = {
     welcome: { subject: "Bienvenue sur XAFEARN", message: "Salut !\n\nBienvenue sur XAFEARN, la plateforme qui te permet de gagner de l'argent en ligne." },
@@ -275,9 +276,9 @@ export function EmailForm({ users }: { users: any[] }) {
     custom: { subject: '', message: '' }
   }
 
-  const showToast = (message: string, type: 'success' | 'error') => {
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     setToast({ message, type })
-    setTimeout(() => setToast(null), 4000)
+    setTimeout(() => setToast(null), 6000)
   }
 
   const handleTemplateChange = (key: string) => {
@@ -291,9 +292,10 @@ export function EmailForm({ users }: { users: any[] }) {
     if (!subject || !message) return showToast('Sujet et message requis.', 'error')
     
     setIsSending(true)
+    setLastResult('🚀 Envoi en cours...')
+    showToast('Envoi en cours...', 'info')
 
     try {
-      // 🚀 VRAI ENVOI VIA L'API
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -305,21 +307,27 @@ export function EmailForm({ users }: { users: any[] }) {
         })
       })
 
-      const data = await res.json()
+      const text = await res.text()
+      let data
+      try { data = JSON.parse(text) } catch { data = { error: text } }
 
       if (!res.ok) {
-        throw new Error(data.error || 'Erreur d\'envoi')
+        throw new Error(data.error || `Erreur HTTP ${res.status}`)
       }
 
-      if (data.sent !== undefined) {
-        showToast(`${data.sent} email(s) envoyé(s) avec succès !`, 'success')
+      if (data.success && data.sent > 0) {
+        const resultMsg = `✅ ${data.sent} email(s) envoyé(s) avec succès.`
+        setLastResult(resultMsg)
+        showToast(resultMsg, 'success')
+        setSubject(''); setMessage(''); setSelectedTemplate('custom')
       } else {
-        showToast('Email envoyé !', 'success')
+        throw new Error(data.error || 'Aucun email n\'a été envoyé.')
       }
-
-      setSubject(''); setMessage(''); setSelectedTemplate('custom')
     } catch (err: any) {
-      showToast('Erreur : ' + err.message, 'error')
+      console.error('Erreur envoi:', err)
+      const errorMsg = `❌ ${err.message}`
+      setLastResult(errorMsg)
+      showToast(errorMsg, 'error')
     } finally {
       setIsSending(false)
     }
@@ -327,7 +335,16 @@ export function EmailForm({ users }: { users: any[] }) {
 
   return (
     <form onSubmit={handleSend} className="space-y-4">
-      {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
+      {toast && (
+        <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-lg text-white text-sm font-bold flex items-center gap-2 max-w-[90%] ${
+          toast.type === 'success' ? 'bg-emerald-500' : 
+          toast.type === 'error' ? 'bg-red-500' : 
+          'bg-sky-500'
+        }`}>
+          <span>{toast.message}</span>
+        </div>
+      )}
+
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Modèle</label>
         <div className="flex flex-wrap gap-2">
@@ -338,6 +355,7 @@ export function EmailForm({ users }: { users: any[] }) {
           ))}
         </div>
       </div>
+
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Destinataire</label>
         <select value={selectedUser} onChange={e => setSelectedUser(e.target.value)} className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white">
@@ -345,16 +363,36 @@ export function EmailForm({ users }: { users: any[] }) {
           {users.map(u => <option key={u.id} value={u.id}>{u.full_name || u.email}</option>)}
         </select>
       </div>
+
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Sujet</label>
         <input type="text" value={subject} onChange={e => setSubject(e.target.value)} className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white" placeholder="Sujet..." required />
       </div>
+
       <div>
         <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Message</label>
         <textarea value={message} onChange={e => setMessage(e.target.value)} rows={6} className="w-full p-3 bg-slate-800 border border-slate-700 rounded-xl text-sm text-white resize-none" placeholder="Message..." required />
       </div>
-      <button type="submit" disabled={isSending} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-md">
-        {isSending ? 'Envoi en cours...' : 'Envoyer l\'email'}
+
+      {lastResult && (
+        <div className={`p-3 rounded-xl text-xs font-bold ${
+          lastResult.startsWith('✅') ? 'bg-emerald-900/40 text-emerald-300 border border-emerald-800' :
+          lastResult.startsWith('❌') ? 'bg-red-900/40 text-red-300 border border-red-800' :
+          'bg-sky-900/40 text-sky-300 border border-sky-800'
+        }`}>
+          {lastResult}
+        </div>
+      )}
+
+      <button type="submit" disabled={isSending} className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-md flex justify-center items-center gap-2">
+        {isSending ? (
+          <>
+            <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            Envoi en cours...
+          </>
+        ) : (
+          'Envoyer l\'email'
+        )}
       </button>
     </form>
   )
