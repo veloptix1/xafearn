@@ -24,9 +24,9 @@ export async function POST(req: Request) {
     const style = styleMap[template || 'elegant'] || styleMap.elegant
     const prompt = `Professional advertising poster for "${product}" in ${city}, ${style} style, high quality commercial photography, vibrant colors, no text, photorealistic, 4k`
 
-    // 🚀 NOUVELLE URL : router.huggingface.co (l'ancienne est morte)
+    // 🚀 SEUL MODÈLE SUPPORTÉ GRATUITEMENT PAR HF-INFERENCE
     const response = await fetch(
-      'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-2-1',
+      'https://router.huggingface.co/hf-inference/models/stabilityai/stable-diffusion-3-medium-diffusers',
       {
         method: 'POST',
         headers: {
