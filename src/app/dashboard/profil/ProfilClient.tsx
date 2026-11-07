@@ -1,4 +1,5 @@
 'use client'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -27,7 +28,7 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
     { icon: 'bell', label: 'Notifications', href: '/dashboard/profil/notifications', color: 'text-slate-700', bg: 'bg-slate-100' },
     { icon: 'wallet', label: 'Mes transactions', href: '/dashboard/profil/transactions', color: 'text-emerald-600', bg: 'bg-emerald-50' },
     { icon: 'shield', label: 'Sécurité & Confidentialité', href: '/dashboard/profil/securite', color: 'text-amber-600', bg: 'bg-amber-50' },
-    { icon: 'help', label: 'Aide & Support', href: '/dashboard/profil/support', color: 'text-slate-700', bg: 'bg-slate-100' },
+    { icon: 'support', label: 'Service Client', href: '/dashboard/profil/support', color: 'text-indigo-600', bg: 'bg-indigo-50', badge: '24/7' },
   ]
 
   const getIcon = (name: string) => {
@@ -39,7 +40,7 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
       case 'bell': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
       case 'wallet': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
       case 'shield': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-      case 'help': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      case 'support': return <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M18.364 5.636l-3.536 3.536m0 5.656l3.536 3.536M9.172 9.172L5.636 5.636m3.536 9.192l-3.536 3.536M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-5 0a4 4 0 11-8 0 4 4 0 018 0z" />
       default: return null
     }
   }
@@ -49,6 +50,7 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
 
   return (
     <div className="max-w-lg mx-auto">
+      
       {/* Carte de visite */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6">
         <div className={`h-24 bg-gradient-to-r ${levelColor}`}></div>
@@ -80,14 +82,14 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
         <div className="bg-white border border-slate-200 p-4 rounded-2xl shadow-sm mb-6">
           <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">Mode d'utilisation</p>
           <div className="flex bg-slate-100 p-1 rounded-xl">
-            <button 
-              onClick={() => isAnnonceurMode && toggleMode()} 
+            <button
+              onClick={() => isAnnonceurMode && toggleMode()}
               className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${!isAnnonceurMode ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500'}`}
             >
               💰 Diffuseur
             </button>
-            <button 
-              onClick={() => !isAnnonceurMode && toggleMode()} 
+            <button
+              onClick={() => !isAnnonceurMode && toggleMode()}
               className={`flex-1 py-2.5 rounded-lg text-sm font-bold transition flex items-center justify-center gap-2 ${isAnnonceurMode ? 'bg-white text-amber-600 shadow-sm' : 'text-slate-500'}`}
             >
               📢 Annonceur
@@ -102,7 +104,7 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
       {/* Menu des options */}
       <div className="bg-white border border-slate-200 rounded-3xl shadow-sm overflow-hidden mb-6">
         {menuItems.map((item, index) => (
-          <Link 
+          <Link
             key={index}
             href={item.href}
             className="w-full flex items-center justify-between p-4 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition text-left"
@@ -113,7 +115,12 @@ export default function ProfilClient({ profile: initialProfile }: { profile: any
                   {getIcon(item.icon)}
                 </svg>
               </div>
-              <span className="font-semibold text-slate-800 text-sm">{item.label}</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-800 text-sm">{item.label}</span>
+                {item.badge && (
+                  <span className="text-[9px] font-bold bg-indigo-500 text-white px-1.5 py-0.5 rounded-md">{item.badge}</span>
+                )}
+              </div>
             </div>
             <svg className="w-5 h-5 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
           </Link>
