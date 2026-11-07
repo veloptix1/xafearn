@@ -11,6 +11,7 @@ import BottomNav from '@/components/BottomNav'
 export default function DashboardPage() {
   const router = useRouter()
   const supabase = createClient()
+  
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isAnnonceurMode, setIsAnnonceurMode] = useState(false)
@@ -19,21 +20,24 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function loadData() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { router.push('/login'); return }
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) { router.push('/login'); return }
 
-      const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-      if (data) {
-        if (!data.is_onboarded) { router.push('/onboarding'); return }
-        setProfile(data)
-        setIsAnnonceurMode(data.role === 'annonceur')
+        const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
         
-        // Compter les messages non lus
-        const { data: convs } = await supabase.from('conversations').select('id').or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-        if (convs && convs.length > 0) {
-          const convIds = convs.map(c => c.id)
-          const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).in('conversation_id', convIds).eq('is_read', false).neq('sender_id', user.id)
-          setUnreadMessages(count || 0)
+        if (data) {
+          if (!data.is_onboarded) { router.push('/onboarding'); return }
+          setProfile(data)
+          setIsAnnonceurMode(data.role === 'annonceur')
+
+          // Compter les messages non lus
+          const { data: convs } = await supabase.from('conversations').select('id').or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+          if (convs && convs.length > 0) {
+            const convIds = convs.map(c => c.id)
+            const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).in('conversation_id', convIds).eq('is_read', false).neq('sender_id', user.id)
+            setUnreadMessages(count || 0)
+          }
         }
 
         // Popup une seule fois par session
@@ -44,8 +48,11 @@ export default function DashboardPage() {
             sessionStorage.setItem('hasSeenSeriesPopup', 'true')
           }, 1500)
         }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     loadData()
   }, [router, supabase])
@@ -59,7 +66,7 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
       <WelcomePopup />
-      
+
       {/* POPUP SÉRIES */}
       {showSeriesPopup && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
@@ -67,10 +74,8 @@ export default function DashboardPage() {
             <button onClick={() => setShowSeriesPopup(false)} className="absolute top-4 right-4 z-20 text-slate-400 hover:text-slate-700 bg-slate-100 p-1.5 rounded-full transition">
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
-
             <div className="absolute top-0 right-0 w-32 h-32 bg-purple-100 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-100 rounded-full blur-xl transform -translate-x-10 translate-y-10"></div>
-
             <div className="relative z-10 text-center">
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-purple-500/30 transform rotate-3">
                 <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" /></svg>
@@ -106,7 +111,7 @@ export default function DashboardPage() {
         {!isAnnonceurMode ? (
           <div className="space-y-4">
             
-            {/* Carte Solde */}
+            {/* Carte Solde (Corrigée) */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
               <div className="relative z-10 flex justify-between items-start">
@@ -124,7 +129,7 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* 🚀 CARTE NIVEAU */}
+            {/* Carte Niveau */}
             <Link href="/dashboard/niveaux" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between active:bg-slate-50 transition">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
@@ -147,12 +152,9 @@ export default function DashboardPage() {
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1 pt-2">Services</h2>
             <div className="grid grid-cols-2 gap-3">
               
-              {/* 🚀 Messages avec badge non-lu */}
               <Link href="/dashboard/messages" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition relative">
                 {unreadMessages > 0 && (
-                  <div className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
-                    {unreadMessages}
-                  </div>
+                  <div className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">{unreadMessages}</div>
                 )}
                 <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 mb-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
@@ -167,6 +169,15 @@ export default function DashboardPage() {
                 </div>
                 <h3 className="font-bold text-slate-900 text-sm">Réseau</h3>
                 <p className="text-[10px] text-slate-500">Publications</p>
+              </Link>
+
+              {/* 🔥 NOUVELLE CARTE MON LIEN */}
+              <Link href="/dashboard/mon-lien" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
+                <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 mb-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
+                </div>
+                <h3 className="font-bold text-slate-900 text-sm">Mon Lien</h3>
+                <p className="text-[10px] text-slate-500">Parrainage & gains</p>
               </Link>
 
               <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">

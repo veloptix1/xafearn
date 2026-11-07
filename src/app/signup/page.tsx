@@ -1,6 +1,7 @@
 'use client'
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { onUserSignup } from './actions'
@@ -24,6 +25,8 @@ const paysAfrique = [
 export default function SignupPage() {
   const router = useRouter()
   const supabase = createClient()
+  const searchParams = useSearchParams()
+  
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [fullName, setFullName] = useState('')
@@ -34,6 +37,13 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState(false)
+  const [refCode, setRefCode] = useState<string | null>(null)
+
+  useEffect(() => {
+    // Récupérer le code de parrainage depuis l'URL
+    const ref = searchParams.get('ref')
+    if (ref) setRefCode(ref)
+  }, [searchParams])
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -55,6 +65,7 @@ export default function SignupPage() {
           phone: fullPhone,
           country: selectedCountry.code,
           role: role,
+          referral_code: refCode || null // 🔥 On passe le code parrain ici
         }
       }
     })
@@ -66,10 +77,8 @@ export default function SignupPage() {
     }
 
     if (data.user) {
-      // Envoi de l'email de bienvenue en arrière-plan
       try {
         await onUserSignup(data.user.id, email, fullName)
-        // Appel à l'API pour envoyer l'email (côté client, Vercel ne coupe pas)
         fetch('/api/send-welcome', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -107,14 +116,20 @@ export default function SignupPage() {
         <Link href="/" className="block text-center mb-6">
           <img src="/logo.png" alt="XAFEARN" className="h-10 w-auto object-contain mx-auto" />
         </Link>
-        
+
         <div className="bg-white border border-slate-200 p-6 md:p-8 rounded-3xl shadow-sm">
           <h1 className="text-2xl font-black text-slate-900 mb-1 text-center">Créer un compte</h1>
           <p className="text-slate-500 text-sm mb-6 text-center">Rejoins XAFEARN et commence à gagner.</p>
 
+          {/* Bannière si un parrain est détecté */}
+          {refCode && (
+            <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-4 flex items-center gap-2">
+              <svg className="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+              <p className="text-xs text-emerald-800 font-medium">Tu as été invité par un ami (Code: <strong>{refCode}</strong>).</p>
+            </div>
+          )}
+
           <form onSubmit={handleSignup} className="space-y-4">
-            
-            {/* Choix du rôle */}
             <div className="flex bg-slate-100 p-1 rounded-xl">
               <button type="button" onClick={() => setRole('diffuseur')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${role === 'diffuseur' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Diffuseur</button>
               <button type="button" onClick={() => setRole('annonceur')} className={`flex-1 py-2 rounded-lg text-sm font-bold transition ${role === 'annonceur' ? 'bg-white text-sky-600 shadow-sm' : 'text-slate-500'}`}>Annonceur</button>
@@ -161,7 +176,7 @@ export default function SignupPage() {
               {loading ? 'Création...' : "S'inscrire"}
             </button>
           </form>
-          
+
           <p className="text-center text-sm text-slate-500 mt-6">
             Déjà un compte ? <Link href="/login" className="text-sky-500 font-bold hover:underline">Se connecter</Link>
           </p>
