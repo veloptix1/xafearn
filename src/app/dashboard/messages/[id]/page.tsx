@@ -1,6 +1,5 @@
 'use client'
 
-
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -35,6 +34,8 @@ const Icons = {
   Mic: () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z" /></svg>,
   Send: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
   Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>,
+  Info: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>,
+  Users: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>,
 }
 
 const TypingDots = () => (
@@ -99,7 +100,8 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
-  const [otherUser, setOtherUser] = useState<any>(null)
+  const [otherUser, setOtherUser] = useState<any>(null) // Sera le groupe si isGroup = true
+  const [isGroup, setIsGroup] = useState(false)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
   const [isOtherOnline, setIsOtherOnline] = useState(false)
@@ -165,8 +167,16 @@ export default function ChatPage() {
 
       const { data: conv } = await supabase.from('conversations').select('*, user1:user1_id(*), user2:user2_id(*)').eq('id', conversationId).single()
       if (!conv || !isMounted) { router.replace('/dashboard/messages'); return }
-      const other = conv.user1_id === session.user.id ? conv.user2 : conv.user1
-      setOtherUser(other); otherUserRef.current = other
+      
+      if (conv.is_group) {
+        setIsGroup(true)
+        setOtherUser({ full_name: conv.group_name, group_avatar_url: conv.group_avatar_url })
+        otherUserRef.current = { full_name: conv.group_name, id: 'group' }
+      } else {
+        setIsGroup(false)
+        const other = conv.user1_id === session.user.id ? conv.user2 : conv.user1
+        setOtherUser(other); otherUserRef.current = other
+      }
 
       await loadMessages()
       if (isMounted) setLoading(false)
@@ -196,7 +206,7 @@ export default function ChatPage() {
 
       presenceChannel = supabase.channel(`presence-${conversationId}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload: any) => {
-          if (!isMounted || !payload.new || !otherUserRef.current) return
+          if (!isMounted || !payload.new || !otherUserRef.current || isGroup) return
           if (payload.new.user_id === otherUserRef.current.id) setIsOtherOnline(Date.now() - new Date(payload.new.last_seen).getTime() < 60000)
         })
         .subscribe()
@@ -430,11 +440,21 @@ export default function ChatPage() {
           </div>
         ) : (
           <>
-            <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm">{otherUser?.full_name?.charAt(0) || '?'}</div>
+            {isGroup && otherUser?.group_avatar_url ? (
+              <img src={otherUser.group_avatar_url} alt="Groupe" className="w-10 h-10 rounded-full object-cover shrink-0" />
+            ) : (
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm ${isGroup ? 'bg-emerald-500' : 'bg-gradient-to-br from-sky-400 to-blue-500'}`}>
+                {otherUser?.full_name?.charAt(0) || '?'}
+              </div>
+            )}
             <div className="flex-1 min-w-0">
               <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
               <div className="flex items-center h-4">
-                {isOtherTyping ? <TypingDots /> : (
+                {isGroup ? (
+                  <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1"><Icons.Users /> Groupe</p>
+                ) : isOtherTyping ? (
+                  <TypingDots />
+                ) : (
                   <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOtherOnline ? 'En ligne' : 'Hors ligne'}</p>
                 )}
               </div>
@@ -444,6 +464,9 @@ export default function ChatPage() {
             )}
             {isSupported && isSubscribed && (
               <div className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg></div>
+            )}
+            {isGroup && (
+              <button onClick={() => router.push(`/dashboard/messages/${conversationId}/info`)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Info /></button>
             )}
             <button onClick={() => setIsSearchOpen(true)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Search /></button>
           </>
@@ -467,6 +490,9 @@ export default function ChatPage() {
                 
                 return (
                   <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
+                    {isGroup && !isMe && (
+                      <p className="text-[10px] font-bold text-slate-500 ml-2 mb-0.5">{m.sender?.full_name || 'Membre'}</p>
+                    )}
                     <div
                       onTouchStart={() => handleTouchStart(m)}
                       onTouchEnd={handleTouchEnd}
