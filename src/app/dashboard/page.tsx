@@ -15,6 +15,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true)
   const [isAnnonceurMode, setIsAnnonceurMode] = useState(false)
   const [showSeriesPopup, setShowSeriesPopup] = useState(false)
+  const [unreadMessages, setUnreadMessages] = useState(0)
 
   useEffect(() => {
     async function loadData() {
@@ -27,6 +28,14 @@ export default function DashboardPage() {
         setProfile(data)
         setIsAnnonceurMode(data.role === 'annonceur')
         
+        // Compter les messages non lus
+        const { data: convs } = await supabase.from('conversations').select('id').or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        if (convs && convs.length > 0) {
+          const convIds = convs.map(c => c.id)
+          const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).in('conversation_id', convIds).eq('is_read', false).neq('sender_id', user.id)
+          setUnreadMessages(count || 0)
+        }
+
         // Popup une seule fois par session
         const hasSeenPopup = sessionStorage.getItem('hasSeenSeriesPopup')
         if (!hasSeenPopup) {
@@ -51,7 +60,7 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       <WelcomePopup />
       
-      {/* POPUP SÉRIES (une seule fois par session) */}
+      {/* POPUP SÉRIES */}
       {showSeriesPopup && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative shadow-2xl overflow-hidden">
@@ -138,7 +147,13 @@ export default function DashboardPage() {
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1 pt-2">Services</h2>
             <div className="grid grid-cols-2 gap-3">
               
-              <Link href="/dashboard/messages" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
+              {/* 🚀 Messages avec badge non-lu */}
+              <Link href="/dashboard/messages" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition relative">
+                {unreadMessages > 0 && (
+                  <div className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md z-10">
+                    {unreadMessages}
+                  </div>
+                )}
                 <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 mb-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>
                 </div>
