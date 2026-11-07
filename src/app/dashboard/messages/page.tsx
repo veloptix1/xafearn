@@ -6,6 +6,11 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import BottomNav from '@/components/BottomNav'
 
+function Toast({ message, onClose }: { message: string, onClose: () => void }) {
+  useEffect(() => { const t = setTimeout(onClose, 2500); return () => clearTimeout(t) }, [onClose])
+  return <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">{message}</div>
+}
+
 export default function MessagesPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -21,19 +26,21 @@ export default function MessagesPage() {
   const [creatingConv, setCreatingConv] = useState(false)
   const [menuConv, setMenuConv] = useState<any>(null)
   const [deleting, setDeleting] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
 
   const load = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push('/login')
+    // 🔥 Utiliser getSession au lieu de getUser (plus rapide et fiable)
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session) { router.replace('/login'); return }
 
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (!prof) return
     setProfile(prof)
 
     const { data, error } = await supabase
       .from('conversations')
       .select(`id,last_message,last_message_at,last_message_sender_id,user1_id,user2_id,user1:user1_id(id, full_name),user2:user2_id(id, full_name)`)
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+      .or(`user1_id.eq.${session.user.id},user2_id.eq.${session.user.id}`)
       .order('last_message_at', { ascending: false })
 
     if (!error) setConversations(data || [])
@@ -41,7 +48,7 @@ export default function MessagesPage() {
     if (data && data.length > 0) {
       const counts: Record<string, number> = {}
       for (const conv of data) {
-        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('conversation_id', conv.id).eq('is_read', false).neq('sender_id', user.id)
+        const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('conversation_id', conv.id).eq('is_read', false).neq('sender_id', session.user.id)
         counts[conv.id] = count || 0
       }
       setUnreadCounts(counts)
@@ -57,13 +64,13 @@ export default function MessagesPage() {
     async function init() {
       await load()
       if (!isMounted) return
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-      convChannel = supabase.channel(`convs-${user.id}`)
+      convChannel = supabase.channel(`convs-${session.user.id}`)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'conversations' }, () => load())
         .subscribe()
-      msgChannel = supabase.channel(`msgs-${user.id}`)
+      msgChannel = supabase.channel(`msgs-${session.user.id}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => load())
         .subscribe()
     }
@@ -98,7 +105,7 @@ export default function MessagesPage() {
       const { data: newConv, error } = await supabase.from('conversations').insert({ user1_id: profile.id, user2_id: userId, last_message: 'Nouvelle conversation', last_message_at: new Date().toISOString() }).select('id').single()
       if (error) throw error
       router.push(`/dashboard/messages/${newConv.id}`)
-    } catch (err: any) { alert('Erreur: ' + err.message) }
+    } catch (err: any) { setToast('Erreur: ' + err.message) }
     setCreatingConv(false)
   }
 
@@ -111,20 +118,19 @@ export default function MessagesPage() {
       if (error) throw error
       setConversations(prev => prev.filter(c => c.id !== menuConv.id))
       setMenuConv(null)
-    } catch (err: any) {
-      alert('Erreur suppression: ' + err.message)
-    }
+      setToast('Conversation supprimée')
+    } catch (err: any) { setToast('Erreur suppression: ' + err.message) }
     setDeleting(false)
   }
 
   const markAsRead = async () => {
     if (!menuConv || !profile) return
     try {
-      // Marquer tous les messages de cette conv comme lus
       await supabase.from('messages').update({ is_read: true }).eq('conversation_id', menuConv.id).neq('sender_id', profile.id).eq('is_read', false)
       setUnreadCounts(prev => ({ ...prev, [menuConv.id]: 0 }))
       setMenuConv(null)
-    } catch (err: any) { alert('Erreur: ' + err.message) }
+      setToast('Marqué comme lu')
+    } catch (err: any) { setToast('Erreur: ' + err.message) }
   }
 
   const filteredConversations = conversations.filter(c => {
@@ -221,40 +227,17 @@ export default function MessagesPage() {
         <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={() => setMenuConv(null)}>
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-4 shadow-2xl animate-in slide-in-from-bottom duration-200" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-            <p className="text-sm font-bold text-slate-900 mb-1 text-center">
-              {menuConv.user1_id === profile?.id ? menuConv.user2?.full_name : menuConv.user1?.full_name}
-            </p>
+            <p className="text-sm font-bold text-slate-900 mb-1 text-center">{menuConv.user1_id === profile?.id ? menuConv.user2?.full_name : menuConv.user1?.full_name}</p>
             <p className="text-xs text-slate-500 text-center mb-4">Que veux-tu faire ?</p>
-
-            <button
-              onClick={() => { setMenuConv(null); router.push(`/dashboard/messages/${menuConv.id}`) }}
-              className="w-full py-3 bg-sky-50 text-sky-600 font-bold rounded-xl text-sm mb-2 active:bg-sky-100"
-            >
-              💬 Ouvrir la conversation
-            </button>
-            <button
-              onClick={markAsRead}
-              className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2 active:bg-slate-100"
-            >
-              ✅ Marquer comme lu
-            </button>
-            <button
-              onClick={deleteConversation}
-              disabled={deleting}
-              className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl text-sm mb-2 active:bg-red-100 disabled:opacity-50"
-            >
-              {deleting ? 'Suppression...' : '🗑️ Supprimer la conversation'}
-            </button>
-            <button
-              onClick={() => setMenuConv(null)}
-              className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm active:bg-slate-200"
-            >
-              Annuler
-            </button>
+            <button onClick={() => { setMenuConv(null); router.push(`/dashboard/messages/${menuConv.id}`) }} className="w-full py-3 bg-sky-50 text-sky-600 font-bold rounded-xl text-sm mb-2 active:bg-sky-100">💬 Ouvrir la conversation</button>
+            <button onClick={markAsRead} className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2 active:bg-slate-100">✅ Marquer comme lu</button>
+            <button onClick={deleteConversation} disabled={deleting} className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl text-sm mb-2 active:bg-red-100 disabled:opacity-50">{deleting ? 'Suppression...' : '🗑️ Supprimer la conversation'}</button>
+            <button onClick={() => setMenuConv(null)} className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm active:bg-slate-200">Annuler</button>
           </div>
         </div>
       )}
 
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
       <BottomNav />
     </main>
   )

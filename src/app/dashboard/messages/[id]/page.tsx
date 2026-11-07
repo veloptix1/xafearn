@@ -6,6 +6,19 @@ import { createClient } from '@/lib/supabase/client'
 
 const PAGE_SIZE = 50
 
+// 🎨 Composant Toast personnalisé
+function Toast({ message, onClose }: { message: string, onClose: () => void }) {
+  useEffect(() => {
+    const t = setTimeout(onClose, 2500)
+    return () => clearTimeout(t)
+  }, [onClose])
+  return (
+    <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">
+      {message}
+    </div>
+  )
+}
+
 export default function ChatPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -20,7 +33,7 @@ export default function ChatPage() {
   const channelRef = useRef<any>(null)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
-  const recordTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const recordTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<any[]>([])
@@ -40,7 +53,9 @@ export default function ChatPage() {
   const [showAttachMenu, setShowAttachMenu] = useState(false)
   const [isRecording, setIsRecording] = useState(false)
   const [recordTime, setRecordTime] = useState(0)
-  const recordTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // 🔔 Toast personnalisé
+  const [toast, setToast] = useState<string | null>(null)
 
   const profileRef = useRef<any>(null)
   const otherUserRef = useRef<any>(null)
@@ -84,35 +99,42 @@ export default function ChatPage() {
     let presenceInterval: NodeJS.Timeout | null = null
 
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user || !isMounted) return router.push('/login')
-      await supabase.removeAllChannels()
+      // 🔥 Attendre un peu pour être sûr que la session est chargée
+      await new Promise(r => setTimeout(r, 100))
+      
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) {
+        // Si vraiment pas de session, on redirige
+        if (isMounted) router.replace('/login')
+        return
+      }
 
-      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
       if (!prof || !isMounted) return
       setProfile(prof); profileRef.current = prof
 
       const { data: conv } = await supabase.from('conversations').select('*, user1:user1_id(*), user2:user2_id(*)').eq('id', conversationId).single()
-      if (!conv || !isMounted) return router.push('/dashboard/messages')
-      const other = conv.user1_id === user.id ? conv.user2 : conv.user1
+      if (!conv || !isMounted) { router.replace('/dashboard/messages'); return }
+      const other = conv.user1_id === session.user.id ? conv.user2 : conv.user1
       setOtherUser(other); otherUserRef.current = other
 
       await loadMessages()
       if (isMounted) setLoading(false)
 
-      await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
+      await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: session.user.id })
 
       channelRef.current = supabase.channel(`chat-${conversationId}`)
         .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, async (payload: any) => {
           if (!isMounted) return
           setMessages(prev => prev.some(m => m.id === payload.new.id) ? prev : [...prev, payload.new])
           if (!isScrolledUpRef.current) setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-          if (payload.new.sender_id !== user.id && isScrolledUpRef.current && notificationPermission === 'granted') {
+          
+          if (payload.new.sender_id !== session.user.id && isScrolledUpRef.current && notificationPermission === 'granted') {
             new Notification(`💬 ${otherUserRef.current?.full_name || 'Nouveau message'}`, {
               body: payload.new.content || '📎 Fichier', icon: '/favicon.ico', tag: conversationId
             })
           }
-          await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
+          await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: session.user.id })
         })
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload: any) => {
           if (!isMounted) return
@@ -135,10 +157,10 @@ export default function ChatPage() {
         })
         .subscribe()
 
-      await supabase.from('user_presence').upsert({ user_id: user.id, last_seen: new Date().toISOString() })
+      await supabase.from('user_presence').upsert({ user_id: session.user.id, last_seen: new Date().toISOString() })
       presenceInterval = setInterval(async () => {
         if (!isMounted) return
-        await supabase.from('user_presence').upsert({ user_id: user.id, last_seen: new Date().toISOString() })
+        await supabase.from('user_presence').upsert({ user_id: session.user.id, last_seen: new Date().toISOString() })
       }, 30000)
     }
     init()
@@ -201,7 +223,7 @@ export default function ChatPage() {
       channelRef.current?.send({ type: 'broadcast', event: 'typing', payload: { user_id: profile.id, is_typing: false } })
     } catch (err: any) {
       setMessages(prev => prev.filter(m => m.id !== tempId))
-      alert('Erreur envoi: ' + err.message)
+      setToast('Erreur envoi: ' + err.message)
     }
     setSending(false)
   }
@@ -225,7 +247,7 @@ export default function ChatPage() {
       setMessages(prev => [...prev, inserted])
       await supabase.from('conversations').update({ last_message: label, last_message_at: new Date().toISOString(), last_message_sender_id: profile.id }).eq('id', conversationId)
       setTimeout(() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' }), 100)
-    } catch (err: any) { alert('Erreur upload: ' + err.message) }
+    } catch (err: any) { setToast('Erreur upload: ' + err.message) }
     setUploading(false)
     setShowAttachMenu(false)
   }
@@ -233,13 +255,12 @@ export default function ChatPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 10 * 1024 * 1024) return alert('Fichier max 10 Mo')
+    if (file.size > 10 * 1024 * 1024) return setToast('Fichier max 10 Mo')
     const type = file.type.startsWith('image/') ? 'image' : 'file'
     uploadAndSend(file, type)
     e.target.value = ''
   }
 
-  // 🎤 Enregistrement vocal
   const startRecording = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -256,7 +277,7 @@ export default function ChatPage() {
       mediaRecorder.start()
       setIsRecording(true); setRecordTime(0)
       recordTimerRef.current = setInterval(() => setRecordTime(t => t + 1), 1000)
-    } catch (err: any) { alert('Micro non autorisé: ' + err.message) }
+    } catch (err: any) { setToast('Micro non autorisé: ' + err.message) }
   }
 
   const stopRecording = () => {
@@ -275,16 +296,17 @@ export default function ChatPage() {
   }
 
   const deleteMessage = async (msg: any) => {
-    if (!profile || msg.sender_id !== profile.id) { alert("Tu ne peux supprimer que tes propres messages."); setLongPressMessage(null); return }
+    if (!profile || msg.sender_id !== profile.id) { setToast("Tu ne peux supprimer que tes propres messages."); setLongPressMessage(null); return }
     if (!confirm('Supprimer ce message ?')) return
     await supabase.from('messages').delete().eq('id', msg.id)
     setMessages(prev => prev.filter(m => m.id !== msg.id))
     setLongPressMessage(null)
+    setToast('Message supprimé')
   }
 
   const copyMessage = async (msg: any) => {
-    try { await navigator.clipboard.writeText(msg.content || ''); alert('Message copié !') }
-    catch { alert('Impossible de copier') }
+    try { await navigator.clipboard.writeText(msg.content || ''); setToast('📋 Message copié !') }
+    catch { setToast('Impossible de copier') }
     setLongPressMessage(null)
   }
 
@@ -305,11 +327,12 @@ export default function ChatPage() {
 
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white border-b border-slate-200 px-5 py-3 sticky top-0 z-50 flex items-center gap-3">
+      {/* 🔥 Header */}
+      <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3 shrink-0">
         <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
         </button>
-        <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white">{otherUser?.full_name?.charAt(0) || '?'}</div>
+        <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shrink-0">{otherUser?.full_name?.charAt(0) || '?'}</div>
         <div className="flex-1 min-w-0">
           <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
           <p className={`text-[10px] font-bold ${isOtherTyping ? 'text-sky-500' : isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
@@ -317,11 +340,12 @@ export default function ChatPage() {
           </p>
         </div>
         {notificationPermission !== 'granted' && (
-          <button onClick={() => Notification.requestPermission().then(p => setNotificationPermission(p))} className="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-500" title="Activer les notifications">🔔</button>
+          <button onClick={() => Notification.requestPermission().then(p => setNotificationPermission(p))} className="text-[10px] bg-slate-100 px-2 py-1 rounded-full text-slate-500 shrink-0" title="Activer les notifications">🔔</button>
         )}
       </header>
 
-      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 pb-40">
+      {/* 🔥 Messages */}
+      <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 pb-4">
         {loadingMore && <div className="text-center text-xs text-slate-400 py-2">Chargement...</div>}
         {!hasMore && messages.length > 0 && <div className="text-center text-xs text-slate-400 py-2">Début de la conversation</div>}
 
@@ -353,7 +377,7 @@ export default function ChatPage() {
                         <audio controls src={m.media_url} className="max-w-full mt-1" style={{ height: 40 }} />
                       ) : m.message_type === 'file' && m.media_url ? (
                         <a href={m.media_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${isMe ? 'text-white' : 'text-sky-600'}`}>
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                          <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
                           <span className="text-xs truncate">{m.content.replace('📎 ', '')}</span>
                         </a>
                       ) : (
@@ -379,8 +403,9 @@ export default function ChatPage() {
         <div ref={bottomRef} />
       </div>
 
+      {/* 🔥 Reply Preview */}
       {replyTo && (
-        <div className="fixed bottom-[88px] inset-x-0 max-w-lg mx-auto bg-slate-100 border-t border-slate-200 px-4 py-2 flex items-center gap-2 z-40">
+        <div className="bg-slate-100 border-t border-slate-200 px-4 py-2 flex items-center gap-2 shrink-0">
           <div className="flex-1 min-w-0 border-l-2 border-sky-500 pl-2">
             <p className="text-[10px] font-bold text-sky-600">{replyTo.sender_id === profile?.id ? 'Vous' : otherUser?.full_name}</p>
             <p className="text-xs text-slate-600 truncate">{replyTo.content}</p>
@@ -389,7 +414,7 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 🎤 Overlay d'enregistrement */}
+      {/* 🎤 Overlay enregistrement */}
       {isRecording && (
         <div className="fixed inset-0 z-[180] bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6">
           <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center animate-pulse mb-6">
@@ -410,53 +435,55 @@ export default function ChatPage() {
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
             <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
             <p className="text-sm font-bold text-slate-900 mb-4 text-center">Envoyer</p>
-
-            <button onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="w-full py-3 bg-sky-50 text-sky-600 font-bold rounded-xl text-sm mb-2 active:bg-sky-100 flex items-center justify-center gap-2">
-              📷 Photo
-            </button>
-            <button onClick={() => { fileInputRef.current?.setAttribute('accept', '*/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2 active:bg-slate-100 flex items-center justify-center gap-2">
-              📎 Document / Fichier
-            </button>
+            <button onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="w-full py-3 bg-sky-50 text-sky-600 font-bold rounded-xl text-sm mb-2 active:bg-sky-100 flex items-center justify-center gap-2">📷 Photo</button>
+            <button onClick={() => { fileInputRef.current?.setAttribute('accept', '*/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2 active:bg-slate-100 flex items-center justify-center gap-2">📎 Document / Fichier</button>
             <button onClick={() => setShowAttachMenu(false)} className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm active:bg-slate-200">Annuler</button>
           </div>
         </div>
       )}
 
-      <form onSubmit={sendMessage} className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-3 flex gap-2 items-center max-w-lg mx-auto z-50">
-        <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-        <button type="button" onClick={() => setShowAttachMenu(true)} disabled={uploading || isRecording} className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50">
-          {uploading
-            ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-            : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-          }
-        </button>
-        <input
-          type="text"
-          value={newMessage}
-          onChange={e => handleTyping(e.target.value)}
-          placeholder="Écris un message..."
-          className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:border-sky-400"
-        />
-        {newMessage.trim() ? (
-          <button type="submit" disabled={sending} className="w-11 h-11 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50 shrink-0">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+      {/* 🔥 FORMULAIRE (Corrigé pour être visible) */}
+      <div className="bg-white border-t border-slate-200 p-2 pb-3 w-full max-w-lg mx-auto z-50 shrink-0">
+        <form onSubmit={sendMessage} className="flex gap-2 items-center w-full">
+          <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+          
+          <button type="button" onClick={() => setShowAttachMenu(true)} disabled={uploading || isRecording} className="w-10 h-10 shrink-0 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center disabled:opacity-50">
+            {uploading ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>}
           </button>
-        ) : (
-          <button
-            type="button"
-            onMouseDown={startRecording}
-            onMouseUp={stopRecording}
-            onTouchStart={(e) => { e.preventDefault(); startRecording() }}
-            onTouchEnd={(e) => { e.preventDefault(); stopRecording() }}
-            disabled={uploading}
-            className="w-11 h-11 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50 shrink-0"
-            title="Maintenir pour enregistrer"
-          >
-            <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z" /></svg>
-          </button>
-        )}
-      </form>
+          
+          <input
+            type="text"
+            value={newMessage}
+            onChange={e => handleTyping(e.target.value)}
+            placeholder="Écris un message..."
+            className="flex-1 min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:border-sky-400"
+          />
+          
+          {newMessage.trim() ? (
+            <button type="submit" disabled={sending} className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onMouseDown={startRecording}
+              onMouseUp={stopRecording}
+              onTouchStart={(e) => { e.preventDefault(); startRecording() }}
+              onTouchEnd={(e) => { e.preventDefault(); stopRecording() }}
+              disabled={uploading}
+              className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50"
+              title="Maintenir pour enregistrer"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M12 14a3 3 0 003-3V5a3 3 0 00-6 0v6a3 3 0 003 3zm5-3a5 5 0 01-10 0H5a7 7 0 006 6.92V21h2v-3.08A7 7 0 0019 11h-2z" /></svg>
+            </button>
+          )}
+        </form>
+      </div>
 
+      {/* Toast */}
+      {toast && <Toast message={toast} onClose={() => setToast(null)} />}
+
+      {/* Menu appui long */}
       {longPressMessage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setLongPressMessage(null)}>
           <div className="bg-white rounded-2xl w-full max-w-xs p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
