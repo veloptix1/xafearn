@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
@@ -22,7 +22,8 @@ const paysAfrique = [
   { code: 'GN', nom: 'Guinée', indicatif: '+224' },
 ]
 
-export default function SignupPage() {
+// 🚀 Composant interne qui utilise useSearchParams
+function SignupForm() {
   const router = useRouter()
   const supabase = createClient()
   const searchParams = useSearchParams()
@@ -40,7 +41,6 @@ export default function SignupPage() {
   const [refCode, setRefCode] = useState<string | null>(null)
 
   useEffect(() => {
-    // Récupérer le code de parrainage depuis l'URL
     const ref = searchParams.get('ref')
     if (ref) setRefCode(ref)
   }, [searchParams])
@@ -65,7 +65,7 @@ export default function SignupPage() {
           phone: fullPhone,
           country: selectedCountry.code,
           role: role,
-          referral_code: refCode || null // 🔥 On passe le code parrain ici
+          referral_code: refCode || null
         }
       }
     })
@@ -121,7 +121,6 @@ export default function SignupPage() {
           <h1 className="text-2xl font-black text-slate-900 mb-1 text-center">Créer un compte</h1>
           <p className="text-slate-500 text-sm mb-6 text-center">Rejoins XAFEARN et commence à gagner.</p>
 
-          {/* Bannière si un parrain est détecté */}
           {refCode && (
             <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-4 flex items-center gap-2">
               <svg className="w-5 h-5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
@@ -183,5 +182,18 @@ export default function SignupPage() {
         </div>
       </div>
     </main>
+  )
+}
+
+// 🚀 Page principale qui enveloppe le formulaire dans Suspense
+export default function SignupPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div>
+      </div>
+    }>
+      <SignupForm />
+    </Suspense>
   )
 }
