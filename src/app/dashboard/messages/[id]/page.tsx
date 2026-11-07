@@ -440,25 +440,31 @@ export default function ChatPage() {
           </div>
         ) : (
           <>
-            {isGroup && otherUser?.group_avatar_url ? (
-              <img src={otherUser.group_avatar_url} alt="Groupe" className="w-10 h-10 rounded-full object-cover shrink-0" />
-            ) : (
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm ${isGroup ? 'bg-emerald-500' : 'bg-gradient-to-br from-sky-400 to-blue-500'}`}>
-                {otherUser?.full_name?.charAt(0) || '?'}
+            {/* 🔥 Zone cliquable : Avatar + Nom */}
+            <button 
+              onClick={() => isGroup && router.push(`/dashboard/messages/${conversationId}/settings`)} 
+              className={`flex items-center gap-3 flex-1 min-w-0 text-left ${isGroup ? 'cursor-pointer active:opacity-70' : 'cursor-default'}`}
+            >
+              {isGroup && otherUser?.group_avatar_url ? (
+                <img src={otherUser.group_avatar_url} alt="Groupe" className="w-10 h-10 rounded-full object-cover shrink-0" />
+              ) : (
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm ${isGroup ? 'bg-emerald-500' : 'bg-gradient-to-br from-sky-400 to-blue-500'}`}>
+                  {otherUser?.full_name?.charAt(0) || '?'}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
+                <div className="flex items-center h-4">
+                  {isGroup ? (
+                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1"><Icons.Users /> Groupe</p>
+                  ) : isOtherTyping ? (
+                    <TypingDots />
+                  ) : (
+                    <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOtherOnline ? 'En ligne' : 'Hors ligne'}</p>
+                  )}
+                </div>
               </div>
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
-              <div className="flex items-center h-4">
-                {isGroup ? (
-                  <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1"><Icons.Users /> Groupe</p>
-                ) : isOtherTyping ? (
-                  <TypingDots />
-                ) : (
-                  <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOtherOnline ? 'En ligne' : 'Hors ligne'}</p>
-                )}
-              </div>
-            </div>
+            </button>
             {isSupported && !isSubscribed && (
               <button onClick={subscribe} className="w-9 h-9 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0 animate-pulse"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg></button>
             )}
