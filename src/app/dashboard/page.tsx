@@ -17,6 +17,9 @@ export default function DashboardPage() {
   const [isAnnonceurMode, setIsAnnonceurMode] = useState(false)
   const [showSeriesPopup, setShowSeriesPopup] = useState(false)
   const [unreadMessages, setUnreadMessages] = useState(0)
+  
+  // 🚀 Nouveau state pour la popup de parrainage
+  const [showReferralPopup, setShowReferralPopup] = useState(false)
 
   useEffect(() => {
     async function loadData() {
@@ -40,13 +43,22 @@ export default function DashboardPage() {
           }
         }
 
-        // Popup une seule fois par session
+        // Popup séries (une fois par session)
         const hasSeenPopup = sessionStorage.getItem('hasSeenSeriesPopup')
         if (!hasSeenPopup) {
           setTimeout(() => {
             setShowSeriesPopup(true)
             sessionStorage.setItem('hasSeenSeriesPopup', 'true')
           }, 1500)
+        }
+
+        // 🚀 Popup de parrainage (une fois par session)
+        const hasSeenReferralPopup = sessionStorage.getItem('hasSeenReferralPopup')
+        if (!hasSeenReferralPopup) {
+          setTimeout(() => {
+            setShowReferralPopup(true)
+            sessionStorage.setItem('hasSeenReferralPopup', 'true')
+          }, 2500) // Apparaît 1s après la popup séries
         }
       } catch (err) {
         console.error(err)
@@ -66,6 +78,32 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
       <WelcomePopup />
+
+      {/* 🚀 POPUP DE PARRAINAGE (Nouvelle) */}
+      {showReferralPopup && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[150] w-[calc(100%-2rem)] max-w-sm animate-in slide-in-from-bottom-4 fade-in duration-300">
+          <div className="bg-gradient-to-br from-sky-500 to-blue-600 rounded-3xl p-5 text-white shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-white/20 rounded-full blur-2xl transform translate-x-8 -translate-y-8"></div>
+            
+            {/* Bouton fermer (croix) */}
+            <button onClick={() => setShowReferralPopup(false)} className="absolute top-3 right-3 w-7 h-7 bg-white/20 rounded-full flex items-center justify-center text-white hover:bg-white/30 transition z-20">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+
+            <div className="relative z-10">
+              <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center mb-3 backdrop-blur-sm">
+                <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <h3 className="font-black text-lg mb-1 leading-tight">Gagne 500 F par personne invitée ! 🎉</h3>
+              <p className="text-sky-100 text-xs mb-4 leading-relaxed">Tu peux désormais gagner de l'argent en partageant ton lien de parrainage. Chaque filleul activé te rapporte 50% de commission !</p>
+              
+              <Link href="/dashboard/mon-lien" onClick={() => setShowReferralPopup(false)} className="block w-full py-3 bg-white text-sky-600 font-bold rounded-xl text-center shadow-md active:scale-95 transition text-sm">
+                Tester maintenant
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* POPUP SÉRIES */}
       {showSeriesPopup && (
@@ -111,7 +149,26 @@ export default function DashboardPage() {
         {!isAnnonceurMode ? (
           <div className="space-y-4">
             
-            {/* Carte Solde (Corrigée) */}
+            {/* Bannière d'activation Premium (si pas activé) */}
+            {!profile?.is_premium && (
+              <Link href="/dashboard/activation" className="block bg-gradient-to-r from-amber-400 to-orange-500 rounded-2xl p-4 shadow-md active:scale-[0.98] transition relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-20 h-20 bg-white/20 rounded-full blur-xl transform translate-x-6 -translate-y-6"></div>
+                <div className="relative z-10 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-white backdrop-blur-sm">
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                    </div>
+                    <div>
+                      <p className="font-black text-white text-sm">Active ton compte Premium</p>
+                      <p className="text-[10px] text-amber-100 font-medium">Débloque les tâches exclusives et le parrainage</p>
+                    </div>
+                  </div>
+                  <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+                </div>
+              </Link>
+            )}
+
+            {/* Carte Solde */}
             <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-5 text-white shadow-lg relative overflow-hidden">
               <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
               <div className="relative z-10 flex justify-between items-start">
@@ -171,13 +228,22 @@ export default function DashboardPage() {
                 <p className="text-[10px] text-slate-500">Publications</p>
               </Link>
 
-              {/* 🔥 NOUVELLE CARTE MON LIEN */}
+              {/* 🔥 CARTE MON LIEN */}
               <Link href="/dashboard/mon-lien" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
                 <div className="w-10 h-10 bg-amber-50 rounded-xl flex items-center justify-center text-amber-500 mb-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>
                 </div>
                 <h3 className="font-bold text-slate-900 text-sm">Mon Lien</h3>
                 <p className="text-[10px] text-slate-500">Parrainage & gains</p>
+              </Link>
+
+              {/* 🔥 CARTE PREMIUM */}
+              <Link href="/dashboard/activation" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
+                <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center text-orange-500 mb-3">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+                </div>
+                <h3 className="font-bold text-slate-900 text-sm">Premium</h3>
+                <p className="text-[10px] text-slate-500">Activer mon compte</p>
               </Link>
 
               <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
@@ -224,7 +290,6 @@ export default function DashboardPage() {
             </div>
           </div>
         ) : (
-          // VUE ANNONCEUR
           <div className="space-y-4">
             <div className="bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl p-6 text-white shadow-lg">
               <p className="text-amber-100 text-xs font-bold uppercase tracking-wider mb-1">Espace Annonceur</p>

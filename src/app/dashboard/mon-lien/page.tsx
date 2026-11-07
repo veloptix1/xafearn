@@ -94,6 +94,30 @@ export default function MonLienPage() {
 
       <div className="p-4 md:p-8 max-w-2xl mx-auto mt-4 space-y-4">
         
+        {/* 🚀 CARTE D'ACTIVATION PREMIUM */}
+        {!profile?.is_premium ? (
+          <div className="bg-gradient-to-br from-amber-400 to-orange-500 rounded-3xl p-6 shadow-lg relative overflow-hidden text-white">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
+            <div className="relative z-10">
+              <h3 className="font-black text-lg mb-1">Active ton compte Premium</h3>
+              <p className="text-amber-100 text-xs mb-4 leading-relaxed">Pour commencer à gagner de l'argent avec tes invitations, tu dois d'abord activer ton compte.</p>
+              <Link href="/dashboard/activation" className="inline-block bg-white text-orange-600 font-bold text-sm px-6 py-2.5 rounded-xl shadow-md active:scale-95 transition">
+                Activer mon compte (2000 F)
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="bg-emerald-50 border border-emerald-200 rounded-3xl p-5 flex items-center gap-4">
+            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+            </div>
+            <div>
+              <p className="font-bold text-emerald-900 text-sm">Compte Activé</p>
+              <p className="text-xs text-emerald-700">Tu peux désormais gagner de l'argent en invitant tes amis.</p>
+            </div>
+          </div>
+        )}
+
         {/* Carte des gains totaux */}
         <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
@@ -130,7 +154,7 @@ export default function MonLienPage() {
           </button>
 
           <div className="mt-4 bg-amber-50 border border-amber-200 p-3 rounded-xl text-[11px] text-amber-800 leading-relaxed">
-            💡 <strong>Rappel important :</strong> Tu ne gagnes de l'argent que si ton filleul <strong>active son compte Premium (2000 FCFA)</strong>. Les comptes non activés ne te rapportent rien.
+            💡 <strong>Rappel important :</strong> Tu gagnes <strong>50% (1000 F)</strong> au Niveau 1, <strong>25% (500 F)</strong> au Niveau 2 et <strong>10% (200 F)</strong> au Niveau 3, uniquement quand ton filleul active son compte.
           </div>
         </div>
 
