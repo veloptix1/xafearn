@@ -1,8 +1,10 @@
+cat > src/app/dashboard/messages/\[id\]/page.tsx << 'EOF'
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { usePushNotifications } from '@/hooks/usePushNotifications'
 import Peer from 'peerjs'
 
 const PAGE_SIZE = 50
@@ -13,7 +15,13 @@ function Toast({ message, onClose }: { message: string, onClose: () => void }) {
   return <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">{message}</div>
 }
 
+// 🎨 Icônes SVG (Nouvelles icônes pour l'audio/vidéo)
 const Icons = {
+  Play: () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
+  Pause: () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
+  Download: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
+  Link: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
+  // ... (autres icônes inchangées)
   Phone: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
   Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
   Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
@@ -31,7 +39,6 @@ const Icons = {
   Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>,
 }
 
-// 🟢 Animation des 3 points
 const TypingDots = () => (
   <div className="flex gap-1 items-center px-1 h-4">
     <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
@@ -39,6 +46,38 @@ const TypingDots = () => (
     <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
   </div>
 )
+
+// 🎵 Composant Audio personnalisé
+function AudioPlayer({ src, isMe }: { src: string, isMe: boolean }) {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [progress, setProgress] = useState(0)
+
+  const togglePlay = () => {
+    if (audioRef.current) {
+      if (isPlaying) audioRef.current.pause()
+      else audioRef.current.play()
+      setIsPlaying(!isPlaying)
+    }
+  }
+
+  const handleTimeUpdate = () => {
+    if (audioRef.current) setProgress((audioRef.current.currentTime / audioRef.current.duration) * 100)
+  }
+
+  return (
+    <div className={`flex items-center gap-2 p-1 rounded-xl min-w-[200px] ${isMe ? 'bg-sky-600/50' : 'bg-slate-100'}`}>
+      <audio ref={audioRef} src={src} onTimeUpdate={handleTimeUpdate} onEnded={() => setIsPlaying(false)} className="hidden" />
+      <button onClick={togglePlay} className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${isMe ? 'bg-white text-sky-600' : 'bg-sky-500 text-white'}`}>
+        {isPlaying ? <Icons.Pause /> : <Icons.Play />}
+      </button>
+      <div className="flex-1 h-1.5 rounded-full bg-black/10 relative overflow-hidden">
+        <div className={`absolute top-0 left-0 h-full rounded-full ${isMe ? 'bg-white' : 'bg-sky-500'}`} style={{ width: `${progress}%` }}></div>
+      </div>
+      <span className={`text-[10px] font-bold pr-2 ${isMe ? 'text-white' : 'text-slate-500'}`}>Audio</span>
+    </div>
+  )
+}
 
 export default function ChatPage() {
   const supabase = createClient()
@@ -57,9 +96,8 @@ export default function ChatPage() {
   const audioChunksRef = useRef<Blob[]>([])
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null)
   
-  // Pour PeerJS (Appels)
   const peerRef = useRef<Peer | null>(null)
-  const [incomingCall, setIncomingCall] = useState<any>(null)
+  const { isSupported, isSubscribed, subscribe } = usePushNotifications()
 
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<any[]>([])
@@ -91,34 +129,13 @@ export default function ChatPage() {
   useEffect(() => { otherUserRef.current = otherUser }, [otherUser])
   useEffect(() => { isScrolledUpRef.current = isScrolledUp }, [isScrolledUp])
 
-  // 📞 Initialisation de PeerJS pour les appels
   useEffect(() => {
     if (!profile) return
-    // On génère un ID unique basé sur l'ID utilisateur
-    const peer = new Peer(`xafearn-${profile.id}`, {
-      config: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
-    })
-
-    peer.on('open', (id) => console.log('PeerJS connecté avec ID:', id))
-    
-    // Recevoir un appel
-    peer.on('call', (call) => {
-      setIncomingCall(call)
-    })
-
+    const peer = new Peer(`xafearn-${profile.id}`, { config: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]} })
+    peer.on('open', (id) => console.log('PeerJS connecté:', id))
     peerRef.current = peer
     return () => { peer.destroy() }
   }, [profile])
-
-  const startCall = async (type: 'audio' | 'video') => {
-    if (!profile || !otherUser) return
-    setToast(`Appel ${type === 'audio' ? 'audio' : 'vidéo'} en cours...`)
-    // Enregistrer l'appel dans Supabase pour notifier l'autre
-    await supabase.from('calls').insert({
-      caller_id: profile.id, receiver_id: otherUser.id, type, status: 'ringing'
-    })
-    // (Logique WebRTC simplifiée pour l'exemple - nécessite l'acceptation de l'autre)
-  }
 
   const loadMessages = useCallback(async (beforeId?: string) => {
     let query = supabase.from('messages').select('*, sender:sender_id(full_name)').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(PAGE_SIZE)
@@ -168,9 +185,7 @@ export default function ChatPage() {
         .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, (payload: any) => {
           if (!isMounted) return
           setMessages(prev => prev.map(m => m.id === payload.new.id ? { ...m, ...payload.new } : m))
-          if (payload.new.is_read && payload.new.sender_id === session.user.id) {
-            setReadTimestamps(prev => ({ ...prev, [payload.new.id]: new Date().toISOString() }))
-          }
+          if (payload.new.is_read && payload.new.sender_id === session.user.id) setReadTimestamps(prev => ({ ...prev, [payload.new.id]: new Date().toISOString() }))
         })
         .on('broadcast', { event: 'typing' }, (payload: any) => {
           if (!isMounted || !otherUserRef.current) return
@@ -207,9 +222,7 @@ export default function ChatPage() {
   }, [conversationId, supabase, router, loadMessages])
 
   useEffect(() => {
-    if (!loading && messages.length > 0 && messagesContainerRef.current) {
-      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
-    }
+    if (!loading && messages.length > 0 && messagesContainerRef.current) messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
   }, [loading])
 
   const handleScroll = async () => {
@@ -252,7 +265,7 @@ export default function ChatPage() {
     setSending(false)
   }
 
-  const uploadAndSend = async (file: File, type: 'image' | 'file' | 'audio' | 'location', contentOverride?: string) => {
+  const uploadAndSend = async (file: File, type: 'image' | 'file' | 'audio' | 'video' | 'location', contentOverride?: string) => {
     if (!profile) return
     setUploading(true)
     try {
@@ -265,7 +278,7 @@ export default function ChatPage() {
         const { data: { publicUrl } } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         media_url = publicUrl
       }
-      const label = contentOverride || (type === 'image' ? '📷 Image' : type === 'audio' ? '🎤 Vocal' : type === 'location' ? '📍 Localisation' : `📎 ${file.name}`)
+      const label = contentOverride || (type === 'image' ? '📷 Image' : type === 'audio' ? '🎤 Vocal' : type === 'video' ? '📹 Vidéo' : type === 'location' ? '📍 Localisation' : `📎 ${file.name}`)
       const { data: inserted, error: insErr } = await supabase.from('messages').insert({ conversation_id: conversationId, sender_id: profile.id, content: label, message_type: type, media_url }).select().single()
       if (insErr) throw insErr
       setMessages(prev => [...prev, inserted])
@@ -278,8 +291,13 @@ export default function ChatPage() {
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
-    if (file.size > 10 * 1024 * 1024) return setToast('Max 10 Mo')
-    uploadAndSend(file, file.type.startsWith('image/') ? 'image' : 'file')
+    if (file.size > 15 * 1024 * 1024) return setToast('Max 15 Mo')
+    
+    let type: 'image' | 'file' | 'video' = 'file'
+    if (file.type.startsWith('image/')) type = 'image'
+    if (file.type.startsWith('video/')) type = 'video'
+    
+    uploadAndSend(file, type)
     e.target.value = ''
   }
 
@@ -365,29 +383,32 @@ export default function ChatPage() {
     return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{part}</mark> : part)
   }
 
-  // 🔗 Détection de liens et génération d'aperçu
+  // 🔗 Rendu du contenu du message (Texte + Liens + Aperçu)
   const renderContent = (m: any) => {
     const text = m.content || ''
     const urlRegex = /(https?:\/\/[^\s]+)/g
     const urls = text.match(urlRegex)
     
     return (
-      <>
-        <p className="whitespace-pre-wrap">{highlightText(text, isSearching ? searchQuery : '')}</p>
+      <div className="break-words">
+        <p className="whitespace-pre-wrap leading-relaxed">{highlightText(text, isSearching ? searchQuery : '')}</p>
+        
+        {/* 🔗 Aperçu du lien */}
         {urls && (
-          <a href={urls[0]} target="_blank" rel="noopener noreferrer" className={`block mt-2 rounded-lg border overflow-hidden ${m.sender_id === profile?.id ? 'bg-sky-600/50 border-sky-400/50' : 'bg-slate-50 border-slate-200'}`}>
-            <div className="flex items-center gap-2 p-2">
-              <div className="w-8 h-8 bg-white rounded flex items-center justify-center shrink-0">
-                <img src={`https://www.google.com/s2/favicons?domain=${new URL(urls[0]).hostname}&sz=32`} alt="logo" className="w-5 h-5" onError={(e) => (e.currentTarget.style.display = 'none')} />
+          <a href={urls[0]} target="_blank" rel="noopener noreferrer" className={`block mt-2 rounded-xl border overflow-hidden shadow-sm hover:opacity-90 transition ${m.sender_id === profile?.id ? 'bg-sky-600/40 border-sky-400/50' : 'bg-slate-50 border-slate-200'}`}>
+            <div className="flex items-center gap-2 p-3">
+              <div className="w-10 h-10 bg-white rounded-lg flex items-center justify-center shrink-0 shadow-sm">
+                <img src={`https://www.google.com/s2/favicons?domain=${new URL(urls[0]).hostname}&sz=64`} alt="logo" className="w-6 h-6" onError={(e) => (e.currentTarget.style.display = 'none')} />
               </div>
               <div className="min-w-0 flex-1">
                 <p className={`text-xs font-bold truncate ${m.sender_id === profile?.id ? 'text-white' : 'text-slate-900'}`}>{new URL(urls[0]).hostname}</p>
                 <p className={`text-[10px] truncate ${m.sender_id === profile?.id ? 'text-sky-100' : 'text-slate-500'}`}>{urls[0]}</p>
               </div>
+              <Icons.Link />
             </div>
           </a>
         )}
-      </>
+      </div>
     )
   }
 
@@ -405,17 +426,17 @@ export default function ChatPage() {
   })
 
   return (
-    <main className="min-h-screen bg-slate-50 flex flex-col">
-      <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3 shrink-0">
-        <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full shrink-0"><Icons.Back /></button>
+    <main className="min-h-screen bg-slate-50 flex flex-col font-sans">
+      <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3 shrink-0 shadow-sm">
+        <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full shrink-0 active:bg-slate-200"><Icons.Back /></button>
         {isSearchOpen ? (
           <div className="flex-1 flex items-center gap-2">
-            <input autoFocus type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400" />
+            <input autoFocus type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-sky-500" />
             <button onClick={() => { setIsSearchOpen(false); setSearchQuery('') }} className="text-slate-500 text-sm font-bold px-2">Annuler</button>
           </div>
         ) : (
           <>
-            <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shrink-0">{otherUser?.full_name?.charAt(0) || '?'}</div>
+            <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shrink-0 shadow-sm">{otherUser?.full_name?.charAt(0) || '?'}</div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
               <div className="flex items-center h-4">
@@ -424,15 +445,17 @@ export default function ChatPage() {
                 )}
               </div>
             </div>
-            {/* 📞 Boutons d'appel */}
-            <button onClick={() => startCall('audio')} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 shrink-0 active:bg-slate-200"><Icons.Phone /></button>
-            <button onClick={() => startCall('video')} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 shrink-0 active:bg-slate-200"><Icons.Video /></button>
+            {isSupported && !isSubscribed && (
+              <button onClick={subscribe} className="w-9 h-9 bg-amber-100 text-amber-600 rounded-full flex items-center justify-center shrink-0 animate-pulse"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" /></svg></button>
+            )}
+            {isSupported && isSubscribed && (
+              <div className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg></div>
+            )}
             <button onClick={() => setIsSearchOpen(true)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Search /></button>
           </>
         )}
       </header>
 
-      {/* Le reste de l'interface des messages (identique) */}
       <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 pb-4">
         {loadingMore && <div className="text-center text-xs text-slate-400 py-2">Chargement...</div>}
         {!hasMore && messages.length > 0 && !isSearching && <div className="text-center text-xs text-slate-400 py-2">Début de la conversation</div>}
@@ -440,8 +463,8 @@ export default function ChatPage() {
 
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date}>
-            <div className="flex justify-center my-4"><span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full">{date}</span></div>
-            <div className="space-y-2">
+            <div className="flex justify-center my-4"><span className="bg-slate-200/80 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full">{date}</span></div>
+            <div className="space-y-3">
               {msgs.map((m: any) => {
                 const isMe = m.sender_id === profile?.id
                 const replyMsg = m.reply_to_id ? getReplyMessage(m.reply_to_id) : null
@@ -454,31 +477,49 @@ export default function ChatPage() {
                       onTouchStart={() => handleTouchStart(m)}
                       onTouchEnd={handleTouchEnd}
                       onContextMenu={(e) => handleContextMenu(e, m)}
-                      className={`max-w-[80%] px-3 py-2 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-sky-500 text-white rounded-br-none' : 'bg-white text-slate-800 border border-slate-200 rounded-bl-none'} ${m.isTemp ? 'opacity-70' : ''}`}
+                      className={`max-w-[85%] px-3.5 py-2.5 rounded-2xl text-sm shadow-sm ${isMe ? 'bg-sky-500 text-white rounded-br-sm' : 'bg-white text-slate-800 border border-slate-100 rounded-bl-sm'} ${m.isTemp ? 'opacity-70' : ''}`}
                     >
                       {replyMsg && (
-                        <div className={`mb-1 px-2 py-1 rounded-lg border-l-2 text-[10px] ${isMe ? 'bg-sky-600/30 border-white/50 text-sky-100' : 'bg-slate-100 border-sky-400 text-slate-600'}`}>
+                        <div className={`mb-2 px-2.5 py-1.5 rounded-lg border-l-2 text-[11px] ${isMe ? 'bg-sky-600/30 border-white/50 text-sky-100' : 'bg-slate-50 border-sky-400 text-slate-600'}`}>
                           <p className="font-bold truncate">{replyMsg.sender?.full_name || (replyMsg.sender_id === profile?.id ? 'Vous' : 'Utilisateur')}</p>
-                          <p className="truncate">{replyMsg.content}</p>
+                          <p className="truncate opacity-80">{replyMsg.content}</p>
                         </div>
                       )}
+                      
+                      {/* 🖼️ Affichage Image */}
                       {m.message_type === 'image' && m.media_url ? (
-                        <img src={m.media_url} alt="Chat" className="rounded-lg max-h-64 w-auto" />
-                      ) : m.message_type === 'audio' && m.media_url ? (
-                        <audio controls src={m.media_url} className="max-w-full mt-1" style={{ height: 40 }} />
-                      ) : m.message_type === 'file' && m.media_url ? (
-                        <a href={m.media_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${isMe ? 'text-white' : 'text-sky-600'}`}>
-                          <Icons.File /> <span className="text-xs truncate">{m.content.replace('📎 ', '')}</span>
+                        <img src={m.media_url} alt="Image" className="rounded-lg max-h-64 w-auto object-cover" loading="lazy" />
+                      ) : 
+                      /* 🎵 Affichage Audio */
+                      m.message_type === 'audio' && m.media_url ? (
+                        <AudioPlayer src={m.media_url} isMe={isMe} />
+                      ) : 
+                      /* 📹 Affichage Vidéo */
+                      m.message_type === 'video' && m.media_url ? (
+                        <video src={m.media_url} controls className="rounded-lg max-h-64 w-auto bg-black" />
+                      ) :
+                      /* 📎 Affichage Fichier */
+                      m.message_type === 'file' && m.media_url ? (
+                        <a href={m.media_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2.5 p-1 rounded-lg ${isMe ? 'text-white' : 'text-sky-600'}`}>
+                          <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isMe ? 'bg-white/20' : 'bg-sky-50'}`}><Icons.File /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-bold truncate">{m.content.replace('📎 ', '')}</p>
+                            <p className={`text-[10px] ${isMe ? 'text-sky-100' : 'text-slate-500'}`}>Appuyer pour télécharger</p>
+                          </div>
                         </a>
-                      ) : m.message_type === 'location' ? (
+                      ) : 
+                      /* 📍 Localisation */
+                      m.message_type === 'location' ? (
                         <a href={m.content} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${isMe ? 'text-white' : 'text-sky-600'}`}>
                           <Icons.Location /> <span className="text-xs">Ouvrir la carte</span>
                         </a>
                       ) : (
-                        renderContent(m) // 🔗 Utilisation du rendu avec détection de liens
+                        /* 💬 Texte + Lien */
+                        renderContent(m)
                       )}
-                      <div className={`flex items-center justify-end gap-1 mt-1 ${isMe ? 'text-sky-100' : 'text-slate-400'}`}>
-                        <p className="text-[9px]">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                      
+                      <div className={`flex items-center justify-end gap-1 mt-1.5 ${isMe ? 'text-sky-100' : 'text-slate-400'}`}>
+                        <p className="text-[9px] font-medium">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                         {isMe && (m.isTemp
                           ? <svg className="w-3 h-3 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                           : m.is_read ? <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" /><path d="M13 16.17L8.83 12l-1.42 1.41L13 19 21 7l-1.41-1.41z" /></svg>
@@ -490,7 +531,7 @@ export default function ChatPage() {
                     {reactionEntries.length > 0 && (
                       <div className={`flex flex-wrap gap-1 mt-1 ${isMe ? 'justify-end' : 'justify-start'}`}>
                         {reactionEntries.map(([emoji, users]: any) => (
-                          <button key={emoji} onClick={() => reactToMessage(m, emoji)} className={`px-1.5 py-0.5 rounded-full text-[10px] flex items-center gap-0.5 ${users.includes(profile?.id) ? 'bg-sky-100 border border-sky-300' : 'bg-slate-100 border border-slate-200'}`}>
+                          <button key={emoji} onClick={() => reactToMessage(m, emoji)} className={`px-2 py-0.5 rounded-full text-[11px] flex items-center gap-1 shadow-sm border ${users.includes(profile?.id) ? 'bg-sky-50 border-sky-200' : 'bg-white border-slate-200'}`}>
                             <span>{emoji}</span><span className="font-bold text-slate-600">{users.length}</span>
                           </button>
                         ))}
@@ -498,7 +539,7 @@ export default function ChatPage() {
                     )}
                     
                     {isMe && isLastMine && m.is_read && readTimestamps[m.id] && (
-                      <p className="text-[9px] text-slate-400 mt-0.5">Vu à {new Date(readTimestamps[m.id]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                      <p className="text-[9px] text-slate-400 mt-1">Vu à {new Date(readTimestamps[m.id]).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
                     )}
                   </div>
                 )
@@ -510,8 +551,8 @@ export default function ChatPage() {
       </div>
 
       {replyTo && (
-        <div className="bg-slate-100 border-t border-slate-200 px-4 py-2 flex items-center gap-2 shrink-0">
-          <div className="flex-1 min-w-0 border-l-2 border-sky-500 pl-2">
+        <div className="bg-slate-50 border-t border-slate-200 px-4 py-2.5 flex items-center gap-2 shrink-0">
+          <div className="flex-1 min-w-0 border-l-2 border-sky-500 pl-2.5">
             <p className="text-[10px] font-bold text-sky-600">{replyTo.sender_id === profile?.id ? 'Vous' : otherUser?.full_name}</p>
             <p className="text-xs text-slate-600 truncate">{replyTo.content}</p>
           </div>
@@ -521,12 +562,12 @@ export default function ChatPage() {
 
       {isRecording && (
         <div className="fixed inset-0 z-[180] bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6">
-          <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center animate-pulse mb-6"><Icons.Mic /></div>
-          <p className="text-2xl font-black mb-2">{Math.floor(recordTime / 60)}:{String(recordTime % 60).padStart(2, '0')}</p>
-          <p className="text-sm text-slate-300 mb-8">Enregistrement...</p>
+          <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center animate-pulse mb-6 shadow-lg shadow-red-500/50"><Icons.Mic /></div>
+          <p className="text-3xl font-black mb-2 tracking-widest">{Math.floor(recordTime / 60)}:{String(recordTime % 60).padStart(2, '0')}</p>
+          <p className="text-sm text-slate-300 mb-8 font-medium">Enregistrement en cours...</p>
           <div className="flex gap-4">
-            <button onClick={cancelRecording} className="px-6 py-3 bg-slate-700 rounded-xl font-bold">Annuler</button>
-            <button onClick={stopRecording} className="px-6 py-3 bg-sky-500 rounded-xl font-bold">Envoyer</button>
+            <button onClick={cancelRecording} className="px-8 py-3 bg-slate-700 rounded-xl font-bold">Annuler</button>
+            <button onClick={stopRecording} className="px-8 py-3 bg-sky-500 rounded-xl font-bold shadow-lg shadow-sky-500/50">Envoyer</button>
           </div>
         </div>
       )}
@@ -540,7 +581,7 @@ export default function ChatPage() {
                 <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center"><Icons.Camera /></div>
                 <span className="text-[10px] font-medium text-slate-600">Caméra</span>
               </button>
-              <button onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="flex flex-col items-center gap-2 p-2 rounded-xl hover:bg-slate-50">
+              <button onClick={() => { fileInputRef.current?.setAttribute('accept', 'image/*,video/*'); fileInputRef.current?.click(); setShowAttachMenu(false) }} className="flex flex-col items-center gap-2 p-2 rounded-xl hover:bg-slate-50">
                 <div className="w-12 h-12 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center"><Icons.Image /></div>
                 <span className="text-[10px] font-medium text-slate-600">Galerie</span>
               </button>
@@ -558,18 +599,18 @@ export default function ChatPage() {
         </div>
       )}
 
-      <div className="bg-white border-t border-slate-200 p-2 pb-3 w-full max-w-lg mx-auto z-50 shrink-0">
+      <div className="bg-white border-t border-slate-200 p-2.5 pb-3 w-full max-w-lg mx-auto z-50 shrink-0">
         <form onSubmit={sendMessage} className="flex gap-2 items-center w-full">
           <input type="file" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
           <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" onChange={handleFileSelect} className="hidden" />
           <button type="button" onClick={() => setShowAttachMenu(true)} disabled={uploading || isRecording} className="w-10 h-10 shrink-0 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center disabled:opacity-50">
             {uploading ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <Icons.Plus />}
           </button>
-          <input type="text" value={newMessage} onChange={e => handleTyping(e.target.value)} placeholder="Écris un message..." className="flex-1 min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:border-sky-400" />
+          <input type="text" value={newMessage} onChange={e => handleTyping(e.target.value)} placeholder="Écris un message..." className="flex-1 min-w-0 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:ring-2 focus:ring-sky-500/50 focus:border-sky-400 transition-all" />
           {newMessage.trim() ? (
-            <button type="submit" disabled={sending} className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50"><Icons.Send /></button>
+            <button type="submit" disabled={sending} className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50 shadow-md shadow-sky-500/20"><Icons.Send /></button>
           ) : (
-            <button type="button" onMouseDown={startRecording} onMouseUp={stopRecording} onTouchStart={(e) => { e.preventDefault(); startRecording() }} onTouchEnd={(e) => { e.preventDefault(); stopRecording() }} disabled={uploading} className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50"><Icons.Mic /></button>
+            <button type="button" onMouseDown={startRecording} onMouseUp={stopRecording} onTouchStart={(e) => { e.preventDefault(); startRecording() }} onTouchEnd={(e) => { e.preventDefault(); stopRecording() }} disabled={uploading} className="w-11 h-11 shrink-0 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50 shadow-md shadow-sky-500/20"><Icons.Mic /></button>
           )}
         </form>
       </div>
@@ -599,10 +640,12 @@ export default function ChatPage() {
                   <span className="text-[10px] font-medium text-slate-600">Copier</span>
                 </button>
               )}
-              <button onClick={() => setLongPressMessage(null)} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
-                <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center"><Icons.Forward /></div>
-                <span className="text-[10px] font-medium text-slate-600">Transférer</span>
-              </button>
+              {longPressMessage.media_url && (
+                <a href={longPressMessage.media_url} download target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50" onClick={() => setLongPressMessage(null)}>
+                  <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center"><Icons.Download /></div>
+                  <span className="text-[10px] font-medium text-slate-600">Télécharger</span>
+                </a>
+              )}
               {longPressMessage.sender_id === profile?.id && (
                 <button onClick={() => deleteMessage(longPressMessage)} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-red-50">
                   <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center"><Icons.Trash /></div>
@@ -617,3 +660,4 @@ export default function ChatPage() {
     </main>
   )
 }
+EOF
