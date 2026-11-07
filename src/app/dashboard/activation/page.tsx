@@ -9,6 +9,7 @@ import Toast from '@/components/Toast'
 export default function ActivationPage() {
   const supabase = createClient()
   const router = useRouter()
+  
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
@@ -22,11 +23,9 @@ export default function ActivationPage() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
       
-      // Charger le profil
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(data)
       
-      // Charger le prix d'activation dynamique
       const { data: setting } = await supabase.from('app_settings').select('value').eq('key', 'activation_price').single()
       if (setting) setActivationPrice(parseInt(setting.value))
       
@@ -35,7 +34,8 @@ export default function ActivationPage() {
     load()
   }, [supabase, router])
 
-  const activateAccount = async () => {
+  // 💳 Payer avec le solde actuel
+  const activateWithBalance = async () => {
     if (!profile) return
     if ((profile.balance || 0) < activationPrice) {
       return showToast(`Solde insuffisant. Il te faut ${activationPrice} FCFA.`, 'error')
@@ -44,12 +44,9 @@ export default function ActivationPage() {
 
     setProcessing(true)
     try {
-      // Appel de la fonction RPC sécurisée
       const { data, error } = await supabase.rpc('activate_premium_account', { p_user_id: profile.id })
-      
       if (error) throw error
 
-      // Notification locale
       await supabase.from('notifications').insert({
         user_id: profile.id,
         title: 'Compte Activé ! 🎉',
@@ -63,6 +60,27 @@ export default function ActivationPage() {
       showToast('Erreur: ' + err.message, 'error')
     }
     setProcessing(false)
+  }
+
+  // 💳 Payer par Mobile Money (LeekPay)
+  const activateWithLeekPay = async () => {
+    setProcessing(true)
+    try {
+      const res = await fetch('/api/leekpay/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          amount: activationPrice, 
+          description: `Activation compte Premium XAFEARN` 
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      window.location.href = data.payment_url
+    } catch (err: any) {
+      showToast(err.message, 'error')
+      setProcessing(false)
+    }
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>
@@ -138,13 +156,26 @@ export default function ActivationPage() {
               ✅ Ton compte est déjà activé
             </div>
           ) : (
-            <button 
-              onClick={activateAccount} 
-              disabled={processing || (profile?.balance || 0) < activationPrice}
-              className="w-full py-4 bg-slate-900 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 transition flex items-center justify-center gap-2"
-            >
-              {processing ? 'Activation...' : `Activer mon compte (${activationPrice.toLocaleString('fr-FR')} F)`}
-            </button>
+            <div className="space-y-2">
+              {/* 💳 Bouton Payer avec Mobile Money (LeekPay) */}
+              <button 
+                onClick={activateWithLeekPay} 
+                disabled={processing}
+                className="w-full py-4 bg-sky-500 text-white font-bold rounded-xl shadow-md disabled:opacity-50 active:scale-[0.98] transition flex items-center justify-center gap-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+                Payer par Mobile Money
+              </button>
+
+              {/* 💰 Bouton Payer avec le solde */}
+              <button 
+                onClick={activateWithBalance} 
+                disabled={processing || (profile?.balance || 0) < activationPrice}
+                className="w-full py-4 bg-slate-900 text-white font-bold rounded-xl shadow-md disabled:opacity-50 active:scale-[0.98] transition"
+              >
+                Payer avec mon solde ({activationPrice.toLocaleString('fr-FR')} F)
+              </button>
+            </div>
           )}
           
           {(profile?.balance || 0) < activationPrice && !profile?.is_premium && (
