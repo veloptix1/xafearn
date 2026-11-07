@@ -11,10 +11,20 @@ function Toast({ message, onClose }: { message: string, onClose: () => void }) {
   return <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">{message}</div>
 }
 
+// 🎨 Icônes SVG
+const Icons = {
+  Open: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" /></svg>,
+  Pin: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 4.5l-3.25 3.25L10.5 6.5 7.5 9.5l5.5 5.5 3-3-1.25-1.25 3.25-3.25 1.5 1.5V3h-5.5l1.5 1.5zM7.5 9.5L4 13l2 2 3.5-3.5M16.5 14.5L20 11l-2-2-3.5 3.5" /></svg>,
+  Archive: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" /></svg>,
+  Check: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>,
+  Mute: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /></svg>,
+  Unmute: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>,
+  Trash: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>,
+}
+
 export default function MessagesPage() {
   const supabase = createClient()
   const router = useRouter()
-
   const [loading, setLoading] = useState(true)
   const [conversations, setConversations] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
@@ -32,18 +42,12 @@ export default function MessagesPage() {
   const load = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession()
     if (!session) { router.replace('/login'); return }
-
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
     if (!prof) return
     setProfile(prof)
 
-    const { data, error } = await supabase
-      .from('conversations')
-      .select(`id,last_message,last_message_at,last_message_sender_id,user1_id,user2_id,is_pinned,is_archived,user1:user1_id(id, full_name),user2:user2_id(id, full_name)`)
-      .or(`user1_id.eq.${session.user.id},user2_id.eq.${session.user.id}`)
-      .order('last_message_at', { ascending: false })
-
-    if (!error) setConversations(data || [])
+    const { data } = await supabase.from('conversations').select(`id,last_message,last_message_at,last_message_sender_id,user1_id,user2_id,is_pinned,is_archived,is_muted,user1:user1_id(id, full_name),user2:user2_id(id, full_name)`).or(`user1_id.eq.${session.user.id},user2_id.eq.${session.user.id}`).order('last_message_at', { ascending: false })
+    if (data) setConversations(data)
 
     if (data && data.length > 0) {
       const counts: Record<string, number> = {}
@@ -58,8 +62,7 @@ export default function MessagesPage() {
 
   useEffect(() => {
     let isMounted = true
-    let convChannel: any = null
-    let msgChannel: any = null
+    let convChannel: any = null, msgChannel: any = null
     async function init() {
       await load()
       if (!isMounted) return
@@ -72,11 +75,7 @@ export default function MessagesPage() {
     return () => { isMounted = false; if (convChannel) supabase.removeChannel(convChannel); if (msgChannel) supabase.removeChannel(msgChannel) }
   }, [load, supabase])
 
-  useEffect(() => {
-    const handleFocus = () => load()
-    window.addEventListener('focus', handleFocus)
-    return () => window.removeEventListener('focus', handleFocus)
-  }, [load])
+  useEffect(() => { const handleFocus = () => load(); window.addEventListener('focus', handleFocus); return () => window.removeEventListener('focus', handleFocus) }, [load])
 
   const openNewMessage = async () => {
     setIsNewMessageOpen(true)
@@ -99,60 +98,49 @@ export default function MessagesPage() {
     setCreatingConv(false)
   }
 
-  const deleteConversation = async () => {
+  const handleAction = async (action: string) => {
     if (!menuConv) return
-    if (!confirm('Supprimer cette conversation ? Tous les messages seront effacés.')) return
     setDeleting(true)
     try {
-      const { error } = await supabase.from('conversations').delete().eq('id', menuConv.id)
-      if (error) throw error
-      setConversations(prev => prev.filter(c => c.id !== menuConv.id))
-      setMenuConv(null); setToast('Conversation supprimée')
+      if (action === 'delete') {
+        if (!confirm('Supprimer cette conversation ?')) { setDeleting(false); return }
+        await supabase.from('conversations').delete().eq('id', menuConv.id)
+        setConversations(prev => prev.filter(c => c.id !== menuConv.id))
+        setToast('Conversation supprimée')
+      } else if (action === 'pin') {
+        const val = !menuConv.is_pinned
+        await supabase.from('conversations').update({ is_pinned: val }).eq('id', menuConv.id)
+        setConversations(prev => prev.map(c => c.id === menuConv.id ? { ...c, is_pinned: val } : c))
+        setToast(val ? 'Épinglée' : 'Désépinglée')
+      } else if (action === 'archive') {
+        const val = !menuConv.is_archived
+        await supabase.from('conversations').update({ is_archived: val }).eq('id', menuConv.id)
+        setConversations(prev => prev.map(c => c.id === menuConv.id ? { ...c, is_archived: val } : c))
+        setToast(val ? 'Archivée' : 'Désarchivée')
+      } else if (action === 'mute') {
+        const val = !menuConv.is_muted
+        await supabase.from('conversations').update({ is_muted: val }).eq('id', menuConv.id)
+        setConversations(prev => prev.map(c => c.id === menuConv.id ? { ...c, is_muted: val } : c))
+        setToast(val ? 'Notifications coupées' : 'Notifications activées')
+      } else if (action === 'read') {
+        await supabase.from('messages').update({ is_read: true }).eq('conversation_id', menuConv.id).neq('sender_id', profile.id).eq('is_read', false)
+        setUnreadCounts(prev => ({ ...prev, [menuConv.id]: 0 }))
+        setToast('Marqué comme lu')
+      }
+      setMenuConv(null)
     } catch (err: any) { setToast('Erreur: ' + err.message) }
     setDeleting(false)
   }
 
-  const markAsRead = async () => {
-    if (!menuConv || !profile) return
-    try {
-      await supabase.from('messages').update({ is_read: true }).eq('conversation_id', menuConv.id).neq('sender_id', profile.id).eq('is_read', false)
-      setUnreadCounts(prev => ({ ...prev, [menuConv.id]: 0 }))
-      setMenuConv(null); setToast('Marqué comme lu')
-    } catch (err: any) { setToast('Erreur: ' + err.message) }
-  }
-
-  const togglePin = async () => {
-    if (!menuConv) return
-    try {
-      const newVal = !menuConv.is_pinned
-      await supabase.from('conversations').update({ is_pinned: newVal }).eq('id', menuConv.id)
-      setConversations(prev => prev.map(c => c.id === menuConv.id ? { ...c, is_pinned: newVal } : c))
-      setMenuConv(null); setToast(newVal ? '📌 Conversation épinglée' : 'Conversation désépinglée')
-    } catch (err: any) { setToast('Erreur: ' + err.message) }
-  }
-
-  const toggleArchive = async () => {
-    if (!menuConv) return
-    try {
-      const newVal = !menuConv.is_archived
-      await supabase.from('conversations').update({ is_archived: newVal }).eq('id', menuConv.id)
-      setConversations(prev => prev.map(c => c.id === menuConv.id ? { ...c, is_archived: newVal } : c))
-      setMenuConv(null); setToast(newVal ? 'Archivée' : 'Désarchivée')
-    } catch (err: any) { setToast('Erreur: ' + err.message) }
-  }
-
-  const filteredConversations = conversations
-    .filter(c => showArchived ? c.is_archived : !c.is_archived)
-    .filter(c => {
-      if (!search.trim() || !profile) return true
-      const other = c.user1_id === profile.id ? c.user2 : c.user1
-      return other?.full_name?.toLowerCase().includes(search.toLowerCase())
-    })
-    .sort((a, b) => {
-      if (a.is_pinned && !b.is_pinned) return -1
-      if (!a.is_pinned && b.is_pinned) return 1
-      return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
-    })
+  const filteredConversations = conversations.filter(c => showArchived ? c.is_archived : !c.is_archived).filter(c => {
+    if (!search.trim() || !profile) return true
+    const other = c.user1_id === profile.id ? c.user2 : c.user1
+    return other?.full_name?.toLowerCase().includes(search.toLowerCase())
+  }).sort((a, b) => {
+    if (a.is_pinned && !b.is_pinned) return -1
+    if (!a.is_pinned && b.is_pinned) return 1
+    return new Date(b.last_message_at).getTime() - new Date(a.last_message_at).getTime()
+  })
 
   const filteredUsers = allUsers.filter(u => u.full_name?.toLowerCase().includes(userSearch.toLowerCase()))
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0)
@@ -167,8 +155,8 @@ export default function MessagesPage() {
         <h1 className="text-lg font-black text-slate-900 flex-1">{showArchived ? 'Archivées' : 'Messages'}</h1>
         {totalUnread > 0 && !showArchived && <span className="bg-rose-500 text-white text-xs font-bold px-2 py-1 rounded-full">{totalUnread}</span>}
         {archivedCount > 0 && (
-          <button onClick={() => setShowArchived(!showArchived)} className={`text-xs font-bold px-3 py-1.5 rounded-full ${showArchived ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
-            {showArchived ? '← Retour' : `📦 ${archivedCount}`}
+          <button onClick={() => setShowArchived(!showArchived)} className={`text-xs font-bold px-3 py-1.5 rounded-full transition ${showArchived ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-600'}`}>
+            {showArchived ? 'Retour' : `Archives (${archivedCount})`}
           </button>
         )}
       </header>
@@ -181,37 +169,39 @@ export default function MessagesPage() {
 
         {filteredConversations.length === 0 ? (
           <div className="text-center py-20 bg-white rounded-3xl border border-slate-200 mt-4">
-            <h3 className="font-bold text-slate-900 mb-1">{showArchived ? 'Aucune archivée' : search ? 'Aucun résultat' : 'Aucune conversation'}</h3>
-            {!showArchived && <button onClick={openNewMessage} className="px-5 py-2.5 bg-sky-500 text-white font-bold rounded-xl text-sm">Nouveau message</button>}
+            <h3 className="font-bold text-slate-900 mb-1">{showArchived ? 'Aucune archivée' : 'Aucune conversation'}</h3>
+            {!showArchived && <button onClick={openNewMessage} className="mt-2 px-5 py-2.5 bg-sky-500 text-white font-bold rounded-xl text-sm">Nouveau message</button>}
           </div>
         ) : (
           <div className="space-y-2">
             {filteredConversations.map(c => {
               const other = c.user1_id === profile?.id ? c.user2 : c.user1
               const unread = unreadCounts[c.id] || 0
-              const isMyMessage = c.last_message_sender_id === profile?.id
               return (
-                <div key={c.id} className={`relative border rounded-2xl shadow-sm transition ${unread > 0 ? 'bg-sky-50 border-sky-200' : 'bg-white border-slate-200'} ${c.is_pinned ? 'ring-2 ring-amber-200' : ''}`}>
+                <div key={c.id} className={`relative border rounded-2xl shadow-sm transition ${unread > 0 ? 'bg-sky-50 border-sky-200' : 'bg-white border-slate-200'} ${c.is_pinned ? 'ring-1 ring-amber-300' : ''}`}>
                   <Link href={`/dashboard/messages/${c.id}`} className="block p-4 pr-14">
                     <div className="flex items-center gap-3">
                       <div className="relative shrink-0">
                         <div className="w-12 h-12 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white text-lg">{other?.full_name?.charAt(0) || '?'}</div>
-                        {c.is_pinned && <span className="absolute -top-1 -right-1 text-sm">📌</span>}
+                        {c.is_pinned && <div className="absolute -top-1 -right-1 w-4 h-4 bg-amber-400 rounded-full flex items-center justify-center text-white"><Icons.Pin /></div>}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
-                          <p className={`truncate ${unread > 0 ? 'font-black' : 'font-bold'} text-slate-900`}>{other?.full_name || 'Utilisateur'}</p>
+                          <div className="flex items-center gap-1 min-w-0">
+                            <p className={`truncate ${unread > 0 ? 'font-black' : 'font-bold'} text-slate-900`}>{other?.full_name || 'Utilisateur'}</p>
+                            {c.is_muted && <svg className="w-3.5 h-3.5 text-slate-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" /></svg>}
+                          </div>
                           <span className="text-[10px] text-slate-400 shrink-0">{c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}</span>
                         </div>
                         <div className="flex items-center justify-between gap-2 mt-0.5">
-                          <p className={`text-xs truncate ${unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>{isMyMessage && <span className="text-slate-400">Vous : </span>}{c.last_message || 'Nouvelle conversation'}</p>
+                          <p className={`text-xs truncate ${unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>{c.last_message || 'Nouvelle conversation'}</p>
                           {unread > 0 && <span className="bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center">{unread}</span>}
                         </div>
                       </div>
                     </div>
                   </Link>
                   <button onClick={(e) => { e.preventDefault(); e.stopPropagation(); setMenuConv(c) }} className="absolute right-2 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-600 active:bg-slate-100 rounded-full">
-                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+                    <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" /></svg>
                   </button>
                 </div>
               )
@@ -220,17 +210,13 @@ export default function MessagesPage() {
         )}
       </div>
 
-      {!showArchived && (
-        <button onClick={openNewMessage} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-gradient-to-tr from-sky-400 to-blue-600 text-white rounded-full flex items-center justify-center shadow-lg">
-          <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
-        </button>
-      )}
+      {!showArchived && <button onClick={openNewMessage} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-sky-500 text-white rounded-full flex items-center justify-center shadow-lg"><svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg></button>}
 
       {isNewMessageOpen && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col">
             <div className="p-4 border-b border-slate-200 flex justify-between items-center">
-              <h2 className="font-black text-lg">Nouveau message</h2>
+              <h2 className="font-bold text-lg">Nouveau message</h2>
               <button onClick={() => setIsNewMessageOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">✕</button>
             </div>
             <div className="p-4 border-b border-slate-100">
@@ -238,7 +224,7 @@ export default function MessagesPage() {
             </div>
             <div className="flex-1 overflow-y-auto">
               {filteredUsers.map(u => (
-                <button key={u.id} onClick={() => startConversation(u.id)} disabled={creatingConv} className="w-full flex items-center gap-3 p-4 border-b border-slate-100 text-left">
+                <button key={u.id} onClick={() => startConversation(u.id)} disabled={creatingConv} className="w-full flex items-center gap-3 p-4 border-b border-slate-100 text-left hover:bg-slate-50">
                   <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white text-sm">{u.full_name?.charAt(0) || '?'}</div>
                   <div className="flex-1 min-w-0"><p className="font-bold text-slate-900 text-sm truncate">{u.full_name}</p><p className="text-[10px] text-slate-500">Niveau {u.level || 1}</p></div>
                 </button>
@@ -248,18 +234,45 @@ export default function MessagesPage() {
         </div>
       )}
 
+      {/* 🎯 MENU PROPRE AVEC SVG */}
       {menuConv && (
-        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm" onClick={() => setMenuConv(null)}>
-          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
-            <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4"></div>
-            <p className="text-sm font-bold text-slate-900 mb-1 text-center">{menuConv.user1_id === profile?.id ? menuConv.user2?.full_name : menuConv.user1?.full_name}</p>
-            <p className="text-xs text-slate-500 text-center mb-4">Que veux-tu faire ?</p>
-            <button onClick={() => { setMenuConv(null); router.push(`/dashboard/messages/${menuConv.id}`) }} className="w-full py-3 bg-sky-50 text-sky-600 font-bold rounded-xl text-sm mb-2">💬 Ouvrir</button>
-            <button onClick={togglePin} className="w-full py-3 bg-amber-50 text-amber-700 font-bold rounded-xl text-sm mb-2">{menuConv.is_pinned ? '📍 Désépingler' : '📌 Épingler en haut'}</button>
-            <button onClick={toggleArchive} className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2">{menuConv.is_archived ? '📤 Désarchiver' : '📦 Archiver'}</button>
-            <button onClick={markAsRead} className="w-full py-3 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm mb-2">✅ Marquer comme lu</button>
-            <button onClick={deleteConversation} disabled={deleting} className="w-full py-3 bg-red-50 text-red-600 font-bold rounded-xl text-sm mb-2 disabled:opacity-50">{deleting ? 'Suppression...' : '🗑️ Supprimer'}</button>
-            <button onClick={() => setMenuConv(null)} className="w-full py-3 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
+        <div className="fixed inset-0 z-[150] flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm" onClick={() => setMenuConv(null)}>
+          <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-2 shadow-2xl animate-in slide-in-from-bottom" onClick={e => e.stopPropagation()}>
+            <div className="w-10 h-1 bg-slate-300 rounded-full mx-auto mt-2 mb-4"></div>
+            
+            <div className="px-4 py-2 mb-2">
+              <p className="text-sm font-bold text-slate-900 text-center">{menuConv.user1_id === profile?.id ? menuConv.user2?.full_name : menuConv.user1?.full_name}</p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 px-2 mb-4">
+              <button onClick={() => { setMenuConv(null); router.push(`/dashboard/messages/${menuConv.id}`) }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
+                <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center"><Icons.Open /></div>
+                <span className="text-[10px] font-medium text-slate-600">Ouvrir</span>
+              </button>
+              <button onClick={() => handleAction('read')} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
+                <div className="w-10 h-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center"><Icons.Check /></div>
+                <span className="text-[10px] font-medium text-slate-600">Lu</span>
+              </button>
+              <button onClick={() => handleAction('mute')} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${menuConv.is_muted ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`}>{menuConv.is_muted ? <Icons.Unmute /> : <Icons.Mute />}</div>
+                <span className="text-[10px] font-medium text-slate-600">{menuConv.is_muted ? 'Activer' : 'Muet'}</span>
+              </button>
+              <button onClick={() => handleAction('pin')} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center ${menuConv.is_pinned ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-600'}`}><Icons.Pin /></div>
+                <span className="text-[10px] font-medium text-slate-600">{menuConv.is_pinned ? 'Détacher' : 'Épingler'}</span>
+              </button>
+            </div>
+
+            <div className="border-t border-slate-100">
+              <button onClick={() => handleAction('archive')} className="w-full py-3 px-4 flex items-center gap-3 hover:bg-slate-50 text-slate-700">
+                <Icons.Archive /> <span className="text-sm font-medium">{menuConv.is_archived ? 'Désarchiver' : 'Archiver'}</span>
+              </button>
+              <button onClick={() => handleAction('delete')} className="w-full py-3 px-4 flex items-center gap-3 hover:bg-red-50 text-red-600">
+                <Icons.Trash /> <span className="text-sm font-medium">Supprimer</span>
+              </button>
+            </div>
+            
+            <button onClick={() => setMenuConv(null)} className="w-full py-3 mt-2 bg-slate-50 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
           </div>
         </div>
       )}
