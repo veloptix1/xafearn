@@ -22,11 +22,9 @@ export default function MessagesPage() {
   useEffect(() => {
     load()
 
-    // 🚀 Rafraîchir quand on revient sur la page (focus)
     const handleFocus = () => load()
     window.addEventListener('focus', handleFocus)
-    
-    // 🚀 Rafraîchir toutes les 5 secondes
+    // Rafraîchir toutes les 5s pour voir les nouveaux messages
     const interval = setInterval(() => load(), 5000)
 
     return () => {
@@ -42,14 +40,30 @@ export default function MessagesPage() {
     const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
     setProfile(prof)
 
-    const { data } = await supabase
+    // On récupère les conversations avec les infos des 2 participants
+    const { data, error } = await supabase
       .from('conversations')
-      .select('*, user1:user1_id(id, full_name, avatar_url), user2:user2_id(id, full_name, avatar_url)')
+      .select(`
+        id,
+        last_message,
+        last_message_at,
+        last_message_sender_id,
+        user1_id,
+        user2_id,
+        user1:user1_id(id, full_name),
+        user2:user2_id(id, full_name)
+      `)
       .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
       .order('last_message_at', { ascending: false })
 
-    setConversations(data || [])
+    if (error) {
+      console.error('Erreur chargement conversations:', error)
+    } else {
+      console.log('Conversations chargées:', data)
+      setConversations(data || [])
+    }
 
+    // Compter les non-lus
     if (data && data.length > 0) {
       const counts: Record<string, number> = {}
       for (const conv of data) {
@@ -65,17 +79,24 @@ export default function MessagesPage() {
   const openNewMessage = async () => {
     setIsNewMessageOpen(true)
     if (allUsers.length === 0) {
-      const { data } = await supabase.from('profiles').select('*').neq('id', profile.id).order('full_name')
+      const { data } = await supabase
+        .from('profiles')
+        .select('id, full_name, level')
+        .neq('id', profile?.id || '')
+        .order('full_name')
+      
       setAllUsers(data || [])
     }
   }
 
   const startConversation = async (userId: string) => {
+    if (!profile) return
     setCreatingConv(true)
     try {
+      // Vérifier si une conversation existe déjà
       const { data: existing } = await supabase
         .from('conversations')
-        .select('*')
+        .select('id')
         .or(`and(user1_id.eq.${profile.id},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${profile.id})`)
         .maybeSingle()
 
@@ -84,16 +105,23 @@ export default function MessagesPage() {
         return
       }
 
+      // Créer la conversation avec les dates par défaut
       const { data: newConv, error } = await supabase
         .from('conversations')
-        .insert({ user1_id: profile.id, user2_id: userId })
-        .select()
+        .insert({ 
+          user1_id: profile.id, 
+          user2_id: userId,
+          last_message: 'Nouvelle conversation',
+          last_message_at: new Date().toISOString()
+        })
+        .select('id')
         .single()
 
       if (error) throw error
       router.push(`/dashboard/messages/${newConv.id}`)
-    } catch (err) {
-      console.error(err)
+    } catch (err: any) {
+      console.error('Erreur création conv:', err)
+      alert('Erreur: ' + err.message)
     }
     setCreatingConv(false)
   }
@@ -145,6 +173,7 @@ export default function MessagesPage() {
         ) : (
           <div className="space-y-2">
             {filteredConversations.map(c => {
+              // Si je suis user1, l'autre est user2, sinon user1
               const other = c.user1_id === profile.id ? c.user2 : c.user1
               const unread = unreadCounts[c.id] || 0
               const isMyMessage = c.last_message_sender_id === profile.id
@@ -152,14 +181,21 @@ export default function MessagesPage() {
               return (
                 <Link key={c.id} href={`/dashboard/messages/${c.id}`} className={`block border rounded-2xl p-4 shadow-sm active:scale-[0.99] transition ${unread > 0 ? 'bg-sky-50 border-sky-200' : 'bg-white border-slate-200'}`}>
                   <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white text-lg shrink-0">{other?.full_name?.charAt(0) || '?'}</div>
+                    <div className="w-12 h-12 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white text-lg shrink-0">
+                      {other?.full_name?.charAt(0) || '?'}
+                    </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between gap-2">
                         <p className={`truncate ${unread > 0 ? 'font-black text-slate-900' : 'font-bold text-slate-900'}`}>{other?.full_name || 'Utilisateur'}</p>
-                        <span className="text-[10px] text-slate-400 shrink-0">{new Date(c.last_message_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">
+                          {new Date(c.last_message_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between gap-2 mt-0.5">
-                        <p className={`text-xs truncate ${unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>{isMyMessage && <span className="text-slate-400">Vous : </span>}{c.last_message || 'Nouvelle conversation'}</p>
+                        <p className={`text-xs truncate ${unread > 0 ? 'text-slate-700 font-medium' : 'text-slate-500'}`}>
+                          {isMyMessage && <span className="text-slate-400">Vous : </span>}
+                          {c.last_message || 'Nouvelle conversation'}
+                        </p>
                         {unread > 0 && <span className="bg-sky-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[20px] text-center shrink-0">{unread}</span>}
                       </div>
                     </div>
