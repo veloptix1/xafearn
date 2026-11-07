@@ -14,9 +14,10 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid record' }, { status: 400 })
     }
 
+    // ✅ Utilisation de SUPABASE_SECRET_KEY (la variable de ton Vercel)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SECRET_KEY!
     )
 
     // Trouver le destinataire
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
       .eq('id', record.sender_id)
       .single()
 
-    // Envoyer la notification à l'API send-push
+    // Envoyer la notification
     const baseUrl = new URL(req.url).origin
     await fetch(`${baseUrl}/api/send-push`, {
       method: 'POST',

@@ -13,9 +13,10 @@ export async function POST(req: Request) {
   try {
     const { receiverId, title, body, url } = await req.json()
 
+    // ✅ Utilisation de SUPABASE_SECRET_KEY (la variable de ton Vercel)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
+      process.env.SUPABASE_SECRET_KEY!
     )
 
     const { data: sub } = await supabaseAdmin
