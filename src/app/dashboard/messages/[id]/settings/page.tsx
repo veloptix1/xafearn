@@ -9,7 +9,6 @@ export default function GroupSettingsPage() {
   const router = useRouter()
   const params = useParams()
   const conversationId = params.id as string
-  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -26,43 +25,61 @@ export default function GroupSettingsPage() {
   const [selectedNewMembers, setSelectedNewMembers] = useState<string[]>([])
   const [userSearch, setUserSearch] = useState('')
 
+  // 🔥 Charger les données proprement
+  const loadData = async (currentUserId: string) => {
+    // 1. Charger le groupe
+    const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single()
+    if (!conv || !conv.is_group) return router.replace('/dashboard/messages')
+    
+    setGroupName(conv.group_name || '')
+    setGroupAvatar(conv.group_avatar_url)
+
+    // 2. Charger les participants (juste les IDs et le rôle)
+    const { data: participants } = await supabase
+      .from('conversation_participants')
+      .select('user_id, is_admin')
+      .eq('conversation_id', conversationId)
+    
+    if (participants && participants.length > 0) {
+      // 3. Charger les profils de ces participants
+      const userIds = participants.map(p => p.user_id)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, level')
+        .in('id', userIds)
+
+      // 4. Fusionner les données
+      const formattedMembers = participants.map(p => {
+        const profile = profiles?.find(prof => prof.id === p.user_id)
+        return {
+          user_id: p.user_id,
+          is_admin: p.is_admin,
+          profile: profile || { full_name: 'Utilisateur inconnu' }
+        }
+      })
+      setMembers(formattedMembers)
+
+      // 5. Vérifier si je suis admin
+      const me = formattedMembers.find(m => m.user_id === currentUserId)
+      setIsAdmin(me?.is_admin || false)
+    }
+
+    // 6. Charger tous les utilisateurs pour l'ajout
+    const { data: users } = await supabase.from('profiles').select('id, full_name, level').order('full_name')
+    setAllUsers(users || [])
+    
+    setLoading(false)
+  }
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return router.replace('/login')
       setProfileId(session.user.id)
-
-      // Charger le groupe
-      const { data: conv } = await supabase.from('conversations').select('*').eq('id', conversationId).single()
-      if (!conv || !conv.is_group) return router.replace('/dashboard/messages')
-      
-      setGroupName(conv.group_name || '')
-      setGroupAvatar(conv.group_avatar_url)
-
-      // Charger les membres
-      await loadMembers(session.user.id)
-
-      // Charger tous les utilisateurs pour l'ajout
-      const { data: users } = await supabase.from('profiles').select('id, full_name, level').order('full_name')
-      setAllUsers(users || [])
-
-      setLoading(false)
+      await loadData(session.user.id)
     }
     init()
   }, [supabase, router, conversationId])
-
-  const loadMembers = async (currentUserId: string) => {
-    const { data: participants } = await supabase
-      .from('conversation_participants')
-      .select('user_id, is_admin, profiles:user_id(full_name, level)')
-      .eq('conversation_id', conversationId)
-    
-    if (participants) {
-      setMembers(participants)
-      const me = participants.find(p => p.user_id === currentUserId)
-      if (me) setIsAdmin(me.is_admin)
-    }
-  }
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -78,7 +95,6 @@ export default function GroupSettingsPage() {
     try {
       let avatarUrl = groupAvatar
       
-      // Upload de la nouvelle photo si changée
       if (newAvatarFile) {
         const ext = newAvatarFile.name.split('.').pop() || 'jpg'
         const fileName = `group-${Date.now()}.${ext}`
@@ -95,7 +111,7 @@ export default function GroupSettingsPage() {
 
       if (error) throw error
       alert('Paramètres enregistrés !')
-      router.push(`/dashboard/messages/${conversationId}/info`)
+      router.push(`/dashboard/messages/${conversationId}`)
     } catch (err: any) {
       alert('Erreur: ' + err.message)
     }
@@ -106,15 +122,19 @@ export default function GroupSettingsPage() {
     if (selectedNewMembers.length === 0) return
     setSaving(true)
     try {
-      const { error } = await supabase.rpc('add_group_members', {
-        p_conv_id: conversationId,
-        p_member_ids: selectedNewMembers
-      })
+      // Utilisation de l'insertion directe (l'admin a les droits)
+      const newParticipants = selectedNewMembers.map(id => ({
+        conversation_id: conversationId,
+        user_id: id,
+        is_admin: false
+      }))
+      
+      const { error } = await supabase.from('conversation_participants').insert(newParticipants)
       if (error) throw error
       
       setSelectedNewMembers([])
       setShowAddMember(false)
-      await loadMembers(profileId!)
+      await loadData(profileId!)
       alert('Membres ajoutés !')
     } catch (err: any) {
       alert('Erreur: ' + err.message)
@@ -133,7 +153,7 @@ export default function GroupSettingsPage() {
         .eq('conversation_id', conversationId)
         .eq('user_id', userId)
       if (error) throw error
-      await loadMembers(profileId!)
+      await loadData(profileId!)
     } catch (err: any) {
       alert('Erreur: ' + err.message)
     }
@@ -150,7 +170,7 @@ export default function GroupSettingsPage() {
         .eq('conversation_id', conversationId)
         .eq('user_id', userId)
       if (error) throw error
-      await loadMembers(profileId!)
+      await loadData(profileId!)
     } catch (err: any) {
       alert('Erreur: ' + err.message)
     }
@@ -244,10 +264,10 @@ export default function GroupSettingsPage() {
             {members.map((m) => (
               <div key={m.user_id} className="flex items-center gap-3 p-3">
                 <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white text-sm shrink-0">
-                  {m.profiles?.full_name?.charAt(0) || '?'}
+                  {m.profile?.full_name?.charAt(0) || '?'}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="font-bold text-slate-900 text-sm truncate">{m.profiles?.full_name || 'Utilisateur'}</p>
+                  <p className="font-bold text-slate-900 text-sm truncate">{m.profile?.full_name || 'Utilisateur'}</p>
                   {m.is_admin && <p className="text-[10px] font-bold text-amber-600">Admin</p>}
                 </div>
                 {isAdmin && m.user_id !== profileId && (
