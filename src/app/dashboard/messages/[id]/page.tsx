@@ -1,3 +1,4 @@
+'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
@@ -632,7 +633,7 @@ export default function ChatPage() {
                 <button onClick={() => deleteMessage(longPressMessage)} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-red-50">
                   <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center"><Icons.Trash /></div>
                   <span className="text-[10px] font-medium text-red-600">Supprimer</span>
-                </a>
+                </button>
               )}
             </div>
             <button onClick={() => setLongPressMessage(null)} className="w-full py-3 mt-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
