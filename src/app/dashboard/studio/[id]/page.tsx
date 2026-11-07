@@ -15,14 +15,15 @@ export default function SeriesEditorPage() {
   const [loading, setLoading] = useState(true)
   const [series, setSeries] = useState<any>(null)
   const [episodes, setEpisodes] = useState<any[]>([])
+  const [profile, setProfile] = useState<any>(null)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
   const [isEditSeriesOpen, setIsEditSeriesOpen] = useState(false)
-  
+
   // Edit Series States
   const [editTitle, setEditTitle] = useState('')
   const [editDescription, setEditDescription] = useState('')
-  
+
   // Add Episode States
   const [epTitle, setEpTitle] = useState('')
   const [epText, setEpText] = useState('')
@@ -38,9 +39,13 @@ export default function SeriesEditorPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
+    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+    setProfile(prof)
+
     const { data: s } = await supabase.from('series').select('*').eq('id', seriesId).single()
+    // 🔒 Sécurité : Seul le créateur peut accéder à cette page
     if (!s || s.creator_id !== user.id) return router.push('/dashboard/studio')
-    
+
     setSeries(s)
     setEditTitle(s.title)
     setEditDescription(s.description || '')
@@ -56,6 +61,7 @@ export default function SeriesEditorPage() {
   }
 
   const handleSaveSeries = async () => {
+    if (!editTitle.trim()) return showToast('Le titre est requis.', 'error')
     const { error } = await supabase.from('series').update({ title: editTitle, description: editDescription }).eq('id', seriesId)
     if (error) {
       showToast('Erreur : ' + error.message, 'error')
@@ -115,7 +121,7 @@ export default function SeriesEditorPage() {
   const handleAddEpisode = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsUploading(true)
-    
+
     const nextNumber = episodes.length + 1
     const isFree = nextNumber <= 4
 
@@ -129,14 +135,14 @@ export default function SeriesEditorPage() {
       let mediaUrl = null
 
       if (series.content_type !== 'text' && epMedia) {
-        // 🚀 VÉRIFICATION DE LA DURÉE (Maintenant 59 minutes = 3540 secondes)
+        // 🚀 VÉRIFICATION DE LA DURÉE (Max 59 minutes = 3540 secondes)
         if (series.content_type === 'video') {
           await new Promise((resolve, reject) => {
             const video = document.createElement('video')
             video.preload = 'metadata'
             video.onloadedmetadata = () => {
               window.URL.revokeObjectURL(video.src)
-              if (video.duration > 3540) { // 3540 secondes = 59 minutes
+              if (video.duration > 3540) {
                 reject(new Error('La vidéo ne doit pas dépasser 59 minutes.'))
               } else {
                 resolve(true)
@@ -153,7 +159,7 @@ export default function SeriesEditorPage() {
         } else {
           const ext = epMedia.name.split('.').pop() || 'jpg'
           const fileName = `ep-${seriesId}-${nextNumber}-${Date.now()}.${ext}`
-          
+
           const { error: upErr } = await supabase.storage
             .from('campaign-images')
             .upload(fileName, epMedia, { contentType: epMedia.type })
@@ -206,7 +212,7 @@ export default function SeriesEditorPage() {
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
-      
+
       <header className="bg-white border-b border-slate-200 px-6 py-4 sticky top-0 z-50 flex justify-between items-center">
         <Link href="/dashboard/studio" className="text-slate-500 hover:text-slate-900 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
@@ -231,7 +237,7 @@ export default function SeriesEditorPage() {
               <p className="text-xs text-amber-600 font-bold mt-1 bg-amber-50 inline-block px-2 py-0.5 rounded">🪙 {series.total_earnings || 0} gagnés</p>
             </div>
           </div>
-          
+
           <div className="flex flex-wrap gap-2">
             <Link href={`/series/${seriesId}`} target="_blank" className="px-3 py-2 bg-sky-50 text-sky-600 border border-sky-200 rounded-lg text-xs font-bold hover:bg-sky-100 transition">
               Voir la page
@@ -249,7 +255,7 @@ export default function SeriesEditorPage() {
         </div>
 
         <h3 className="font-bold text-slate-900 mb-3">Épisodes ({episodes.length})</h3>
-        
+
         {episodes.length === 0 ? (
           <div className="bg-white border border-slate-200 p-8 rounded-2xl text-center">
             <p className="text-slate-500 text-sm mb-4">Aucun épisode pour le moment.</p>
@@ -263,6 +269,7 @@ export default function SeriesEditorPage() {
                   <p className="font-bold text-slate-900 text-sm">Ép. {ep.episode_number} : {ep.title}</p>
                   <p className="text-xs text-slate-500">
                     {ep.is_free ? '🎁 Gratuit' : `🪙 ${ep.price_in_coins} jetons`}
+                    {ep.views_count > 0 && ` • ${ep.views_count} vues`}
                   </p>
                 </div>
                 <div className="flex gap-2 items-center">
@@ -297,7 +304,7 @@ export default function SeriesEditorPage() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md p-6 max-h-[90vh] overflow-y-auto">
             <h2 className="font-bold text-lg mb-4">Nouvel épisode {episodes.length + 1}</h2>
-            
+
             {episodes.length < 4 && (
               <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl mb-4 text-xs text-emerald-800 font-medium">
                 🎁 Cet épisode sera GRATUIT (les 4 premiers sont obligatoires).
@@ -306,18 +313,18 @@ export default function SeriesEditorPage() {
 
             <form onSubmit={handleAddEpisode} className="space-y-4">
               <input type="text" placeholder={`Titre (défaut: Épisode ${episodes.length + 1})`} value={epTitle} onChange={e => setEpTitle(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-sky-500" />
-              
+
               {series.content_type === 'text' ? (
                 <textarea required placeholder="Écris ton épisode ici..." value={epText} onChange={e => setEpText(e.target.value)} rows={8} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none focus:outline-none focus:ring-2 focus:ring-sky-500" />
               ) : (
                 <div>
                   <div className="border-2 border-dashed border-slate-200 hover:border-sky-400 rounded-xl p-4 text-center transition">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       required
-                      accept={series.content_type === 'video' ? 'video/*' : 'image/*'} 
-                      onChange={e => setEpMedia(e.target.files?.[0] || null)} 
-                      className="w-full text-xs text-slate-500" 
+                      accept={series.content_type === 'video' ? 'video/*' : 'image/*'}
+                      onChange={e => setEpMedia(e.target.files?.[0] || null)}
+                      className="w-full text-xs text-slate-500"
                     />
                   </div>
                   {series.content_type === 'video' && (
