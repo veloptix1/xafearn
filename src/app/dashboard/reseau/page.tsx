@@ -5,7 +5,6 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-// Liste des messages qui changeront à chaque ouverture
 const TIPS = [
   "💡 Astuce : Soutiens tes créateurs préférés en leur envoyant des jetons !",
   "📚 Nouveau : Découvre la bibliothèque de séries et gagne des récompenses.",
@@ -17,11 +16,14 @@ const TIPS = [
   "📢 Partage tes publications sur tes réseaux pour gagner plus de visibilité.",
 ]
 
+const MAX_VIDEO_DURATION = 300 // 5 minutes en secondes
+const MAX_VIDEO_SIZE = 100 * 1024 * 1024 // 100 MB
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024 // 10 MB
+
 export default function ReseauPage() {
   const supabase = createClient()
   const router = useRouter()
   
-  // États principaux
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [profile, setProfile] = useState<any>(null)
@@ -32,21 +34,14 @@ export default function ReseauPage() {
   const [hasMore, setHasMore] = useState(true)
   const POSTS_PER_PAGE = 10
 
-  // Système de Toast
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
-  
-  // 🚀 NOUVEAU : Toast d'astuce qui s'affiche à l'ouverture
+
   useEffect(() => {
-    // On choisit un message au hasard
     const randomTip = TIPS[Math.floor(Math.random() * TIPS.length)]
-    
-    // On affiche le toast après 1 seconde (pour laisser le temps à la page de charger)
     const timer = setTimeout(() => {
       setToast({ message: randomTip, type: 'info' })
-      // Il disparaît au bout de 5 secondes
       setTimeout(() => setToast(null), 5000)
     }, 1000)
-
     return () => clearTimeout(timer)
   }, [])
 
@@ -55,14 +50,12 @@ export default function ReseauPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  // États de création de post
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newText, setNewText] = useState('')
   const [newMedia, setNewMedia] = useState<File | null>(null)
   const [mediaType, setMediaType] = useState<'image' | 'video'>('image')
   const [isUploading, setIsUploading] = useState(false)
 
-  // États d'interaction
   const [activePost, setActivePost] = useState<any>(null)
   const [coinAmount, setCoinAmount] = useState(10)
   const [isSending, setIsSending] = useState(false)
@@ -84,7 +77,7 @@ export default function ReseauPage() {
     setLoading(true)
     setPage(0)
     setHasMore(true)
-    
+
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/login')
 
@@ -158,8 +151,11 @@ export default function ReseauPage() {
     setLoadingMore(false)
   }
 
+  // 🔒 Compression d'image (sécurisée)
   const compressImage = (file: File): Promise<Blob> => {
     return new Promise((resolve, reject) => {
+      if (!file.type.startsWith('image/')) return reject('Fichier non-image')
+      
       const reader = new FileReader()
       reader.readAsDataURL(file)
       reader.onload = (event) => {
@@ -177,24 +173,37 @@ export default function ReseauPage() {
           canvas.toBlob((blob) => { if (blob) resolve(blob); else reject('Erreur') }, 'image/jpeg', 0.7)
         }
       }
+      reader.onerror = reject
     })
   }
 
   const handleCreatePost = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!newText && !newMedia) return showToast('Ajoute du texte ou un média.', 'warning')
-
-    if (mediaType === 'video' && newMedia) {
-      const video = document.createElement('video')
-      video.preload = 'metadata'
-      video.onloadedmetadata = async () => {
-        window.URL.revokeObjectURL(video.src)
-        if (video.duration > 25) return showToast('La vidéo ne doit pas dépasser 25 secondes.', 'error')
-        await uploadPost()
+    
+    // 🔒 Validation côté client
+    if (newMedia) {
+      if (mediaType === 'video') {
+        if (newMedia.size > MAX_VIDEO_SIZE) return showToast('La vidéo ne doit pas dépasser 100 MB.', 'error')
+        if (!newMedia.type.startsWith('video/')) return showToast('Le fichier doit être une vidéo.', 'error')
+        
+        const video = document.createElement('video')
+        video.preload = 'metadata'
+        video.onloadedmetadata = async () => {
+          window.URL.revokeObjectURL(video.src)
+          if (video.duration > MAX_VIDEO_DURATION) {
+            return showToast(`La vidéo ne doit pas dépasser ${MAX_VIDEO_DURATION / 60} minutes.`, 'error')
+          }
+          await uploadPost()
+        }
+        video.src = URL.createObjectURL(newMedia)
+        return
+      } else {
+        if (newMedia.size > MAX_IMAGE_SIZE) return showToast('L\'image ne doit pas dépasser 10 MB.', 'error')
+        if (!newMedia.type.startsWith('image/')) return showToast('Le fichier doit être une image.', 'error')
       }
-      video.src = URL.createObjectURL(newMedia)
-      return
     }
+    
     await uploadPost()
   }
 
@@ -211,19 +220,20 @@ export default function ReseauPage() {
         mediaUrl = data.publicUrl
       }
 
-      await supabase.from('posts').insert({
+      const { error } = await supabase.from('posts').insert({
         user_id: profile.id,
         content_type: newMedia ? mediaType : 'text',
         text_content: newText,
         image_url: mediaUrl
       })
+      if (error) throw error
 
       showToast('Publication réussie !', 'success')
       setIsCreateOpen(false)
       setNewText(''); setNewMedia(null)
       loadInitialData()
-    } catch (err) {
-      showToast('Erreur lors de la publication.', 'error')
+    } catch (err: any) {
+      showToast('Erreur lors de la publication : ' + err.message, 'error')
     }
     setIsUploading(false)
   }
@@ -231,6 +241,7 @@ export default function ReseauPage() {
   const handleSendCoins = async () => {
     if (!activePost) return
     if ((profile.coins_balance || 0) < coinAmount) return showToast('Solde insuffisant.', 'error')
+    
     setIsSending(true)
     try {
       const { error } = await supabase.rpc('send_coins', { p_sender_id: profile.id, p_receiver_id: activePost.user_id, p_post_id: activePost.id, p_amount: coinAmount })
@@ -259,27 +270,27 @@ export default function ReseauPage() {
       img.crossOrigin = 'anonymous'
       img.src = post.image_url
       await new Promise((resolve, reject) => { img.onload = resolve; img.onerror = reject })
-      
+
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
       if (!ctx) return
-      
+
       canvas.width = img.width
       canvas.height = img.height + 80
       ctx.drawImage(img, 0, 0)
-      
+
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, img.height, canvas.width, 80)
-      
+
       ctx.fillStyle = '#0f172a'
       ctx.font = 'bold 36px Arial'
       ctx.textAlign = 'center'
       ctx.fillText('XAFEARN', canvas.width / 2, img.height + 50)
-      
+
       ctx.fillStyle = '#0ea5e9'
       ctx.font = 'bold 18px Arial'
       ctx.fillText('Statut • Partage • Gagne', canvas.width / 2, img.height + 70)
-      
+
       const dataUrl = canvas.toDataURL('image/jpeg', 0.9)
       const link = document.createElement('a')
       link.download = `xafearn-${post.id}.jpg`
@@ -317,7 +328,8 @@ export default function ReseauPage() {
     if (!newComment.trim()) return
     setIsCommenting(true)
     try {
-      await supabase.from('post_comments').insert({ post_id: activeCommentPost.id, user_id: profile.id, content: newComment.trim() })
+      const { error } = await supabase.from('post_comments').insert({ post_id: activeCommentPost.id, user_id: profile.id, content: newComment.trim() })
+      if (error) throw error
 
       if (activeCommentPost.user_id !== profile.id) {
         await supabase.from('notifications').insert({
@@ -373,11 +385,11 @@ export default function ReseauPage() {
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-purple-50 relative pb-20">
-      {/* 🚀 TOAST AMÉLIORÉ (avec icône) */}
+      
       {toast && (
         <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[200] px-4 py-3 rounded-xl shadow-xl font-bold text-sm text-white flex items-center gap-2 animate-in slide-in-from-top-4 duration-300 ${
-          toast.type === 'success' ? 'bg-emerald-500' : 
-          toast.type === 'error' ? 'bg-red-500' : 
+          toast.type === 'success' ? 'bg-emerald-500' :
+          toast.type === 'error' ? 'bg-red-500' :
           toast.type === 'warning' ? 'bg-amber-500' : 'bg-slate-800 border border-slate-700'
         }`}>
           {toast.type === 'info' && <span className="text-lg">💡</span>}
@@ -442,6 +454,7 @@ export default function ReseauPage() {
           posts.map(post => (
             <div key={post.id} className="mb-6 px-4">
               <div className="bg-white rounded-3xl overflow-hidden border border-slate-100 shadow-lg relative">
+                
                 <div className="flex items-center justify-between p-3">
                   <Link href={`/u/${post.user_id}`} className="flex items-center gap-3 hover:opacity-80">
                     <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shadow-sm">
@@ -528,7 +541,7 @@ export default function ReseauPage() {
               <textarea placeholder="Quoi de neuf ?" value={newText} onChange={e => setNewText(e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm resize-none focus:border-sky-400 outline-none" rows={3} />
               <div className="flex gap-2 mb-2">
                 <button type="button" onClick={() => setMediaType('image')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${mediaType === 'image' ? 'bg-sky-50 text-sky-600 border-2 border-sky-400' : 'bg-slate-100 text-slate-500'}`}>Image</button>
-                <button type="button" onClick={() => setMediaType('video')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${mediaType === 'video' ? 'bg-sky-50 text-sky-600 border-2 border-sky-400' : 'bg-slate-100 text-slate-500'}`}>Vidéo (25s)</button>
+                <button type="button" onClick={() => setMediaType('video')} className={`flex-1 py-2 rounded-lg font-bold text-sm transition ${mediaType === 'video' ? 'bg-sky-50 text-sky-600 border-2 border-sky-400' : 'bg-slate-100 text-slate-500'}`}>Vidéo (5min max)</button>
               </div>
               <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 text-center relative hover:bg-slate-50 transition">
                 <input type="file" accept={mediaType === 'image' ? 'image/*' : 'video/*'} onChange={e => setNewMedia(e.target.files?.[0] || null)} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
