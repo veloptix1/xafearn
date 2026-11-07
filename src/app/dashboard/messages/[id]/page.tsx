@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import Peer from 'peerjs'
 
 const PAGE_SIZE = 50
 const EMOJIS = ['❤️', '👍', '😂', '😮', '😢', '🙏']
@@ -12,8 +13,11 @@ function Toast({ message, onClose }: { message: string, onClose: () => void }) {
   return <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">{message}</div>
 }
 
-// 🎨 Icônes SVG
 const Icons = {
+  Phone: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
+  Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
+  Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
+  Back: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>,
   Camera: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>,
   Image: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>,
   File: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>,
@@ -26,6 +30,15 @@ const Icons = {
   Send: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>,
   Plus: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>,
 }
+
+// 🟢 Animation des 3 points
+const TypingDots = () => (
+  <div className="flex gap-1 items-center px-1 h-4">
+    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+    <div className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+  </div>
+)
 
 export default function ChatPage() {
   const supabase = createClient()
@@ -43,6 +56,10 @@ export default function ChatPage() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const recordTimerRef = useRef<NodeJS.Timeout | null>(null)
+  
+  // Pour PeerJS (Appels)
+  const peerRef = useRef<Peer | null>(null)
+  const [incomingCall, setIncomingCall] = useState<any>(null)
 
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<any[]>([])
@@ -73,6 +90,35 @@ export default function ChatPage() {
   useEffect(() => { profileRef.current = profile }, [profile])
   useEffect(() => { otherUserRef.current = otherUser }, [otherUser])
   useEffect(() => { isScrolledUpRef.current = isScrolledUp }, [isScrolledUp])
+
+  // 📞 Initialisation de PeerJS pour les appels
+  useEffect(() => {
+    if (!profile) return
+    // On génère un ID unique basé sur l'ID utilisateur
+    const peer = new Peer(`xafearn-${profile.id}`, {
+      config: {'iceServers': [{'urls': 'stun:stun.l.google.com:19302'}]}
+    })
+
+    peer.on('open', (id) => console.log('PeerJS connecté avec ID:', id))
+    
+    // Recevoir un appel
+    peer.on('call', (call) => {
+      setIncomingCall(call)
+    })
+
+    peerRef.current = peer
+    return () => { peer.destroy() }
+  }, [profile])
+
+  const startCall = async (type: 'audio' | 'video') => {
+    if (!profile || !otherUser) return
+    setToast(`Appel ${type === 'audio' ? 'audio' : 'vidéo'} en cours...`)
+    // Enregistrer l'appel dans Supabase pour notifier l'autre
+    await supabase.from('calls').insert({
+      caller_id: profile.id, receiver_id: otherUser.id, type, status: 'ringing'
+    })
+    // (Logique WebRTC simplifiée pour l'exemple - nécessite l'acceptation de l'autre)
+  }
 
   const loadMessages = useCallback(async (beforeId?: string) => {
     let query = supabase.from('messages').select('*, sender:sender_id(full_name)').eq('conversation_id', conversationId).order('created_at', { ascending: false }).limit(PAGE_SIZE)
@@ -219,7 +265,6 @@ export default function ChatPage() {
         const { data: { publicUrl } } = supabase.storage.from('campaign-images').getPublicUrl(fileName)
         media_url = publicUrl
       }
-
       const label = contentOverride || (type === 'image' ? '📷 Image' : type === 'audio' ? '🎤 Vocal' : type === 'location' ? '📍 Localisation' : `📎 ${file.name}`)
       const { data: inserted, error: insErr } = await supabase.from('messages').insert({ conversation_id: conversationId, sender_id: profile.id, content: label, message_type: type, media_url }).select().single()
       if (insErr) throw insErr
@@ -241,10 +286,7 @@ export default function ChatPage() {
   const shareLocation = () => {
     if (!navigator.geolocation) return setToast('Géolocalisation non supportée')
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const url = `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`
-        uploadAndSend(new File([], 'loc'), 'location', url)
-      },
+      (pos) => { uploadAndSend(new File([], 'loc'), 'location', `https://www.google.com/maps?q=${pos.coords.latitude},${pos.coords.longitude}`) },
       () => setToast('Impossible d\'obtenir la position')
     )
     setShowAttachMenu(false)
@@ -323,6 +365,32 @@ export default function ChatPage() {
     return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{part}</mark> : part)
   }
 
+  // 🔗 Détection de liens et génération d'aperçu
+  const renderContent = (m: any) => {
+    const text = m.content || ''
+    const urlRegex = /(https?:\/\/[^\s]+)/g
+    const urls = text.match(urlRegex)
+    
+    return (
+      <>
+        <p className="whitespace-pre-wrap">{highlightText(text, isSearching ? searchQuery : '')}</p>
+        {urls && (
+          <a href={urls[0]} target="_blank" rel="noopener noreferrer" className={`block mt-2 rounded-lg border overflow-hidden ${m.sender_id === profile?.id ? 'bg-sky-600/50 border-sky-400/50' : 'bg-slate-50 border-slate-200'}`}>
+            <div className="flex items-center gap-2 p-2">
+              <div className="w-8 h-8 bg-white rounded flex items-center justify-center shrink-0">
+                <img src={`https://www.google.com/s2/favicons?domain=${new URL(urls[0]).hostname}&sz=32`} alt="logo" className="w-5 h-5" onError={(e) => (e.currentTarget.style.display = 'none')} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className={`text-xs font-bold truncate ${m.sender_id === profile?.id ? 'text-white' : 'text-slate-900'}`}>{new URL(urls[0]).hostname}</p>
+                <p className={`text-[10px] truncate ${m.sender_id === profile?.id ? 'text-sky-100' : 'text-slate-500'}`}>{urls[0]}</p>
+              </div>
+            </div>
+          </a>
+        )}
+      </>
+    )
+  }
+
   if (loading) return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>
 
   const getReplyMessage = (replyId: string) => messages.find(m => m.id === replyId)
@@ -339,9 +407,7 @@ export default function ChatPage() {
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-white border-b border-slate-200 px-4 py-3 sticky top-0 z-50 flex items-center gap-3 shrink-0">
-        <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full shrink-0">
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-        </button>
+        <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full shrink-0"><Icons.Back /></button>
         {isSearchOpen ? (
           <div className="flex-1 flex items-center gap-2">
             <input autoFocus type="text" placeholder="Rechercher..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="flex-1 p-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-400" />
@@ -352,15 +418,21 @@ export default function ChatPage() {
             <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white shrink-0">{otherUser?.full_name?.charAt(0) || '?'}</div>
             <div className="flex-1 min-w-0">
               <p className="font-bold text-slate-900 text-sm truncate">{otherUser?.full_name}</p>
-              <p className={`text-[10px] font-bold ${isOtherTyping ? 'text-sky-500' : isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOtherTyping ? "En train d'écrire..." : isOtherOnline ? 'En ligne' : 'Hors ligne'}</p>
+              <div className="flex items-center h-4">
+                {isOtherTyping ? <TypingDots /> : (
+                  <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>{isOtherOnline ? 'En ligne' : 'Hors ligne'}</p>
+                )}
+              </div>
             </div>
-            <button onClick={() => setIsSearchOpen(true)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
-            </button>
+            {/* 📞 Boutons d'appel */}
+            <button onClick={() => startCall('audio')} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 shrink-0 active:bg-slate-200"><Icons.Phone /></button>
+            <button onClick={() => startCall('video')} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-600 shrink-0 active:bg-slate-200"><Icons.Video /></button>
+            <button onClick={() => setIsSearchOpen(true)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Search /></button>
           </>
         )}
       </header>
 
+      {/* Le reste de l'interface des messages (identique) */}
       <div ref={messagesContainerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto p-4 space-y-3 pb-4">
         {loadingMore && <div className="text-center text-xs text-slate-400 py-2">Chargement...</div>}
         {!hasMore && messages.length > 0 && !isSearching && <div className="text-center text-xs text-slate-400 py-2">Début de la conversation</div>}
@@ -403,7 +475,7 @@ export default function ChatPage() {
                           <Icons.Location /> <span className="text-xs">Ouvrir la carte</span>
                         </a>
                       ) : (
-                        <p className="whitespace-pre-wrap">{highlightText(m.content, isSearching ? searchQuery : '')}</p>
+                        renderContent(m) // 🔗 Utilisation du rendu avec détection de liens
                       )}
                       <div className={`flex items-center justify-end gap-1 mt-1 ${isMe ? 'text-sky-100' : 'text-slate-400'}`}>
                         <p className="text-[9px]">{new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
@@ -449,9 +521,7 @@ export default function ChatPage() {
 
       {isRecording && (
         <div className="fixed inset-0 z-[180] bg-slate-900/80 backdrop-blur-sm flex flex-col items-center justify-center text-white p-6">
-          <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center animate-pulse mb-6">
-            <Icons.Mic />
-          </div>
+          <div className="w-24 h-24 rounded-full bg-red-500 flex items-center justify-center animate-pulse mb-6"><Icons.Mic /></div>
           <p className="text-2xl font-black mb-2">{Math.floor(recordTime / 60)}:{String(recordTime % 60).padStart(2, '0')}</p>
           <p className="text-sm text-slate-300 mb-8">Enregistrement...</p>
           <div className="flex gap-4">
@@ -461,7 +531,6 @@ export default function ChatPage() {
         </div>
       )}
 
-      {/* 📎 Menu d'envoi propre */}
       {showAttachMenu && !isRecording && (
         <div className="fixed inset-0 z-[150] bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center" onClick={() => setShowAttachMenu(false)}>
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -507,7 +576,6 @@ export default function ChatPage() {
 
       {toast && <Toast message={toast} onClose={() => setToast(null)} />}
 
-      {/* 🎯 MENU APPUI LONG PROPRE */}
       {longPressMessage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={() => setLongPressMessage(null)}>
           <div className="bg-white rounded-3xl w-full max-w-sm p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
@@ -520,7 +588,6 @@ export default function ChatPage() {
                 )
               })}
             </div>
-            
             <div className="grid grid-cols-4 gap-2 mb-2">
               <button onClick={() => { setReplyTo(longPressMessage); setLongPressMessage(null) }} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-slate-50">
                 <div className="w-10 h-10 bg-sky-100 text-sky-600 rounded-full flex items-center justify-center"><Icons.Reply /></div>
@@ -543,7 +610,6 @@ export default function ChatPage() {
                 </button>
               )}
             </div>
-            
             <button onClick={() => setLongPressMessage(null)} className="w-full py-3 mt-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
           </div>
         </div>
