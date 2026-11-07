@@ -14,14 +14,26 @@ export default function MessagesPage() {
   const [profile, setProfile] = useState<any>(null)
   const [search, setSearch] = useState('')
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({})
-  
-  // 🚀 Nouveau message
   const [isNewMessageOpen, setIsNewMessageOpen] = useState(false)
   const [allUsers, setAllUsers] = useState<any[]>([])
   const [userSearch, setUserSearch] = useState('')
   const [creatingConv, setCreatingConv] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+
+    // 🚀 Rafraîchir quand on revient sur la page (focus)
+    const handleFocus = () => load()
+    window.addEventListener('focus', handleFocus)
+    
+    // 🚀 Rafraîchir toutes les 5 secondes
+    const interval = setInterval(() => load(), 5000)
+
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      clearInterval(interval)
+    }
+  }, [])
 
   async function load() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -48,12 +60,6 @@ export default function MessagesPage() {
     }
 
     setLoading(false)
-
-    const channel = supabase.channel('conversations-list')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'messages' }, () => { load() })
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
   }
 
   const openNewMessage = async () => {
@@ -165,12 +171,10 @@ export default function MessagesPage() {
         )}
       </div>
 
-      {/* 🚀 FAB Nouveau Message */}
       <button onClick={openNewMessage} className="fixed bottom-24 right-4 z-50 w-14 h-14 bg-gradient-to-tr from-sky-400 to-blue-600 text-white rounded-full flex items-center justify-center shadow-lg shadow-blue-500/50 active:scale-90 transition">
         <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4" /></svg>
       </button>
 
-      {/* Modal Nouveau Message */}
       {isNewMessageOpen && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm sm:p-4">
           <div className="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-md shadow-2xl max-h-[80vh] flex flex-col animate-in slide-in-from-bottom duration-300">

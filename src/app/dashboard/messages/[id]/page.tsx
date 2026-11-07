@@ -19,62 +19,83 @@ export default function ChatPage() {
   const [otherUser, setOtherUser] = useState<any>(null)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
-  const [isTyping, setIsTyping] = useState(false)
   const [isOtherOnline, setIsOtherOnline] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [longPressMessage, setLongPressMessage] = useState<any>(null)
 
   useEffect(() => {
-    load()
-  }, [conversationId])
+    let isMounted = true
+    let presenceInterval: NodeJS.Timeout | null = null
 
-  async function load() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return router.push('/login')
+    async function init() {
+      // 🔥 Nettoyer TOUS les canaux existants pour éviter les conflits
+      await supabase.removeAllChannels()
 
-    const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
-    setProfile(prof)
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user || !isMounted) return router.push('/login')
 
-    const { data: conv } = await supabase.from('conversations').select('*, user1:user1_id(*), user2:user2_id(*)').eq('id', conversationId).single()
-    if (!conv) return router.push('/dashboard/messages')
-    setOtherUser(conv.user1_id === user.id ? conv.user2 : conv.user1)
+      const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+      if (!prof) return
+      setProfile(prof)
 
-    const { data: msgs } = await supabase.from('messages').select('*, sender:sender_id(full_name, avatar_url)').eq('conversation_id', conversationId).order('created_at', { ascending: true })
-    setMessages(msgs || [])
-    setLoading(false)
+      const { data: conv } = await supabase.from('conversations').select('*, user1:user1_id(*), user2:user2_id(*)').eq('id', conversationId).single()
+      if (!conv) return router.push('/dashboard/messages')
+      
+      const other = conv.user1_id === user.id ? conv.user2 : conv.user1
+      setOtherUser(other)
 
-    // Marquer comme lus
-    await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
+      // 🔥 Charger les messages DIRECTEMENT
+      const { data: msgs } = await supabase.from('messages').select('*, sender:sender_id(full_name)').eq('conversation_id', conversationId).order('created_at', { ascending: true })
+      
+      if (isMounted) {
+        setMessages(msgs || [])
+        setLoading(false)
+      }
 
-    // Realtime messages
-    const msgChannel = supabase.channel(`chat-${conversationId}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, async (payload: any) => {
-        setMessages(prev => [...prev, payload.new])
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-        // Marquer comme lu immédiatement
-        await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
-      })
-      .subscribe()
+      // Marquer comme lus
+      await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
 
-    // Realtime présence
-    const presenceChannel = supabase.channel(`presence-${conversationId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload: any) => {
-        if (payload.new?.user_id === (conv.user1_id === user.id ? conv.user2_id : conv.user1_id)) {
-          const lastSeen = new Date(payload.new.last_seen).getTime()
-          setIsOtherOnline(Date.now() - lastSeen < 60000)
-          setIsTyping(payload.new.is_typing && payload.new.typing_in === conversationId)
-        }
-      })
-      .subscribe()
+      // 🔥 Realtime pour les nouveaux messages
+      supabase.channel(`chat-${conversationId}-${Date.now()}`)
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` }, async (payload: any) => {
+          if (!isMounted) return
+          setMessages(prev => {
+            if (prev.some(m => m.id === payload.new.id)) return prev // Éviter les doublons
+            return [...prev, payload.new]
+          })
+          bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+          await supabase.rpc('mark_messages_read', { p_conversation_id: conversationId, p_user_id: user.id })
+        })
+        .subscribe()
 
-    // Signaler notre présence
-    await supabase.from('user_presence').upsert({ user_id: user.id, last_seen: new Date().toISOString() })
+      // 🔥 Realtime présence
+      supabase.channel(`presence-${conversationId}-${Date.now()}`)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'user_presence' }, (payload: any) => {
+          if (!isMounted || !payload.new) return
+          if (payload.new.user_id === other.id) {
+            const lastSeen = new Date(payload.new.last_seen).getTime()
+            setIsOtherOnline(Date.now() - lastSeen < 60000)
+          }
+        })
+        .subscribe()
 
-    return () => { 
-      supabase.removeChannel(msgChannel)
-      supabase.removeChannel(presenceChannel)
+      // Signaler notre présence
+      await supabase.from('user_presence').upsert({ user_id: user.id, last_seen: new Date().toISOString() })
+      
+      presenceInterval = setInterval(async () => {
+        if (!isMounted) return
+        await supabase.from('user_presence').upsert({ user_id: user.id, last_seen: new Date().toISOString() })
+      }, 30000)
     }
-  }
+
+    init()
+
+    return () => {
+      isMounted = false
+      if (presenceInterval) clearInterval(presenceInterval)
+      supabase.removeAllChannels()
+    }
+  }, [conversationId])
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -85,19 +106,24 @@ export default function ChatPage() {
     if (!newMessage.trim() || !profile) return
     setSending(true)
     try {
-      await supabase.from('messages').insert({
+      const { error: msgErr } = await supabase.from('messages').insert({
         conversation_id: conversationId,
         sender_id: profile.id,
         content: newMessage.trim(),
         message_type: 'text'
       })
+      if (msgErr) throw msgErr
+
       await supabase.from('conversations').update({ 
         last_message: newMessage.trim(), 
         last_message_at: new Date().toISOString(),
         last_message_sender_id: profile.id
       }).eq('id', conversationId)
+
       setNewMessage('')
-    } catch (err) { console.error(err) }
+    } catch (err: any) { 
+      console.error(err)
+    }
     setSending(false)
   }
 
@@ -146,7 +172,6 @@ export default function ChatPage() {
     </div>
   )
 
-  // Grouper les messages par date
   const groupedMessages: Record<string, any[]> = {}
   messages.forEach(m => {
     const date = new Date(m.created_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })
@@ -157,28 +182,23 @@ export default function ChatPage() {
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-white border-b border-slate-200 px-5 py-3 sticky top-0 z-50 flex items-center gap-3">
-        <Link href="/dashboard/messages" className="text-slate-500 bg-slate-100 p-2 rounded-full">
+        <button onClick={() => router.push('/dashboard/messages')} className="text-slate-500 bg-slate-100 p-2 rounded-full">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" /></svg>
-        </Link>
+        </button>
         <div className="w-10 h-10 bg-gradient-to-br from-sky-400 to-blue-500 rounded-full flex items-center justify-center font-bold text-white">
           {otherUser?.full_name?.charAt(0) || '?'}
         </div>
         <div>
           <p className="font-bold text-slate-900 text-sm">{otherUser?.full_name}</p>
-          {isTyping ? (
-            <p className="text-[10px] text-sky-500 font-bold animate-pulse">En train d'écrire...</p>
-          ) : (
-            <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
-              {isOtherOnline ? 'En ligne' : 'Hors ligne'}
-            </p>
-          )}
+          <p className={`text-[10px] font-bold ${isOtherOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
+            {isOtherOnline ? 'En ligne' : 'Hors ligne'}
+          </p>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 pb-28">
         {Object.entries(groupedMessages).map(([date, msgs]) => (
           <div key={date}>
-            {/* Séparateur de date */}
             <div className="flex justify-center my-4">
               <span className="bg-slate-200 text-slate-600 text-[10px] font-bold px-3 py-1 rounded-full">{date}</span>
             </div>
@@ -200,11 +220,6 @@ export default function ChatPage() {
                         <p className="text-[9px]">
                           {new Date(m.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                         </p>
-                        {isMe && (
-                          <svg className={`w-3.5 h-3.5 ${m.is_read ? 'text-sky-200' : 'text-sky-300/50'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
-                          </svg>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -218,31 +233,15 @@ export default function ChatPage() {
 
       <form onSubmit={sendMessage} className="fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 p-3 flex gap-2 items-center max-w-lg mx-auto">
         <input type="file" ref={fileInputRef} accept="image/*" onChange={handleImageUpload} className="hidden" />
-        <button 
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50"
-        >
-          {uploading ? (
-            <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
-          )}
+        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading} className="w-10 h-10 bg-slate-100 text-slate-600 rounded-full flex items-center justify-center shrink-0 disabled:opacity-50">
+          {uploading ? <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin"></div> : <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>}
         </button>
-        <input 
-          type="text" 
-          value={newMessage} 
-          onChange={e => setNewMessage(e.target.value)} 
-          placeholder="Écris un message..." 
-          className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:border-sky-400" 
-        />
+        <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} placeholder="Écris un message..." className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-full text-sm outline-none focus:border-sky-400" />
         <button type="submit" disabled={sending || !newMessage.trim()} className="w-11 h-11 bg-sky-500 text-white rounded-full flex items-center justify-center disabled:opacity-50 shrink-0">
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" /></svg>
         </button>
       </form>
 
-      {/* Modal suppression message */}
       {longPressMessage && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4" onClick={() => setLongPressMessage(null)}>
           <div className="bg-white rounded-2xl w-full max-w-xs p-4 shadow-2xl" onClick={e => e.stopPropagation()}>
