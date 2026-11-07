@@ -48,25 +48,66 @@ export default function WheelPage() {
     load()
   }, [supabase, router])
 
+  // 🎨 Dessiner la roue (amélioré)
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
-    const size = 320, center = size / 2, radius = center - 10, anglePerSegment = (2 * Math.PI) / SEGMENTS.length
+    
+    // Forcer une taille fixe
+    const size = 320
+    canvas.width = size
+    canvas.height = size
+    const center = size / 2
+    const radius = center - 10
+    const anglePerSegment = (2 * Math.PI) / SEGMENTS.length
 
     ctx.clearRect(0, 0, size, size)
     SEGMENTS.forEach((seg, i) => {
-      const startAngle = i * anglePerSegment, endAngle = startAngle + anglePerSegment
-      ctx.beginPath(); ctx.moveTo(center, center); ctx.arc(center, center, radius, startAngle, endAngle); ctx.closePath()
-      ctx.fillStyle = seg.color; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2; ctx.stroke()
-      ctx.save(); ctx.translate(center, center); ctx.rotate(startAngle + anglePerSegment / 2)
-      ctx.textAlign = 'right'; ctx.fillStyle = '#ffffff'; ctx.font = 'bold 18px Arial'
-      ctx.fillText(seg.label, radius - 20, 6); ctx.restore()
+      const startAngle = i * anglePerSegment
+      const endAngle = startAngle + anglePerSegment
+      
+      // Dessin du segment
+      ctx.beginPath()
+      ctx.moveTo(center, center)
+      ctx.arc(center, center, radius, startAngle, endAngle)
+      ctx.closePath()
+      ctx.fillStyle = seg.color
+      ctx.fill()
+      ctx.strokeStyle = '#ffffff'
+      ctx.lineWidth = 2
+      ctx.stroke()
+      
+      // Texte
+      ctx.save()
+      ctx.translate(center, center)
+      ctx.rotate(startAngle + anglePerSegment / 2)
+      ctx.textAlign = 'right'
+      ctx.fillStyle = '#ffffff'
+      ctx.font = 'bold 18px Arial'
+      ctx.fillText(seg.label, radius - 20, 6)
+      ctx.restore()
     })
-    ctx.beginPath(); ctx.arc(center, center, 30, 0, 2 * Math.PI); ctx.fillStyle = '#0f172a'; ctx.fill(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 4; ctx.stroke()
-    ctx.beginPath(); ctx.moveTo(center, 10); ctx.lineTo(center - 10, 30); ctx.lineTo(center + 10, 30); ctx.closePath(); ctx.fillStyle = '#0f172a'; ctx.fill()
-  }, [])
+    
+    // Cercle central
+    ctx.beginPath()
+    ctx.arc(center, center, 30, 0, 2 * Math.PI)
+    ctx.fillStyle = '#0f172a'
+    ctx.fill()
+    ctx.strokeStyle = '#ffffff'
+    ctx.lineWidth = 4
+    ctx.stroke()
+    
+    // Flèche
+    ctx.beginPath()
+    ctx.moveTo(center, 10)
+    ctx.lineTo(center - 10, 30)
+    ctx.lineTo(center + 10, 30)
+    ctx.closePath()
+    ctx.fillStyle = '#0f172a'
+    ctx.fill()
+  }, [loading]) // On redessine quand le loading passe à false
 
   const spin = async () => {
     if (!profile || isSpinning || !canSpin?.can_spin) return
@@ -125,9 +166,20 @@ export default function WheelPage() {
           <div className="text-right"><p className="text-xs font-bold text-amber-100 uppercase mb-1">Crédits IA</p><p className="text-2xl font-black">🤖 {profile?.credits_ia || 0}</p></div>
         </div>
 
+        {/* 🎯 LA ROUE : avec taille fixe */}
         <div className="flex justify-center mb-6">
-          <div className="relative" style={{ transform: `rotate(${rotation}deg)`, transitionDuration: '4s', transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
-            <canvas ref={canvasRef} className="w-80 h-80 drop-shadow-2xl" />
+          <div className="relative w-[320px] h-[320px]">
+            <canvas 
+              ref={canvasRef} 
+              style={{ 
+                width: '320px', 
+                height: '320px',
+                transform: `rotate(${rotation}deg)`, 
+                transitionDuration: '4s', 
+                transitionTimingFunction: 'cubic-bezier(0.2, 0.8, 0.2, 1)'
+              }} 
+              className="drop-shadow-2xl"
+            />
           </div>
         </div>
 
