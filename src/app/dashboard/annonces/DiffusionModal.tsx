@@ -13,7 +13,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [uploading, setUploading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [localSubmission, setLocalSubmission] = useState<any>(submission)
-  const [trackingId, setTrackingId] = useState<string | null>(null)
   
   const supabase = createClient()
   const router = useRouter()
@@ -27,48 +26,13 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     async function refresh() {
       const { data } = await supabase.from('ad_submissions').select('*').eq('campaign_id', campaign.id).eq('user_id', userId).maybeSingle()
       setLocalSubmission(data)
-      if (data?.tracking_id) setTrackingId(data.tracking_id)
     }
     refresh()
-  }, [campaign.id, userId, submission, supabase])
+  }, [campaign.id, userId, submission])
 
-  // 🚀 GÉNÉRATION AUTOMATIQUE DU LIEN QUAND ON OUVRE LE MODAL
-  const handleOpenDetails = async () => {
-    setIsOpen(true)
-    setStep('details')
-    
-    // Si on n'a pas encore de lien de tracking, on le génère
-    if (!trackingId && !localSubmission) {
-      try {
-        const newTrackingId = Math.random().toString(36).substring(2, 12)
-        const { data, error } = await supabase.from('ad_submissions').insert({
-          campaign_id: campaign.id,
-          user_id: userId,
-          tracking_id: newTrackingId,
-          status: 'en_attente_proof',
-        }).select().single()
-
-        if (error) throw error
-        setTrackingId(newTrackingId)
-        setLocalSubmission(data)
-      } catch (err: any) {
-        showToast('Erreur : ' + err.message, 'error')
-      }
-    }
-  }
-
-  // 🚀 ÉTAPE 1 : "J'ai publié" → Enregistre la soumission avec statut 'en_attente_proof'
+  // 🚀 ÉTAPE 1 : "J'ai publié" → Enregistre la soumission
   const handlePublishedClick = async () => {
     try {
-      // Si la soumission existe déjà (générée à l'ouverture), on ne fait rien de plus
-      if (localSubmission) {
-        setIsOpen(false)
-        showToast('Publication enregistrée ! Envoie maintenant ta preuve.', 'success')
-        router.refresh()
-        return
-      }
-
-      // Sinon on la crée
       const { data, error } = await supabase.from('ad_submissions').insert({
         campaign_id: campaign.id,
         user_id: userId,
@@ -95,7 +59,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setConfirmed(false)
   }
 
-  // 🚀 ÉTAPE 3 : Envoyer la preuve → Mise à jour avec la vidéo et statut 'pending'
+  // 🚀 ÉTAPE 3 : Envoyer la preuve
   const handleUploadProof = async () => {
     if (!confirmed) return showToast('Tu dois confirmer que ton statut a au moins 18h.', 'warning')
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
@@ -110,7 +74,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-      // Mettre à jour la soumission existante
       const { data, error } = await supabase.from('ad_submissions').update({
         proof_video_url: publicUrl,
         proof_type: 'video',
@@ -179,7 +142,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 PRÊT À ENVOYER LA PREUVE (statut en_attente_proof)
+  // 🟢 PRÊT À ENVOYER LA PREUVE
   if (state === 'ready_to_prove') {
     return (
       <>
@@ -205,7 +168,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   // 🔵 PAS ENCORE PUBLIÉ
   return (
     <>
-      <button onClick={handleOpenDetails} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
+      <button onClick={() => { setIsOpen(true); setStep('details'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
         Diffuser cette annonce
       </button>
 
@@ -246,10 +209,10 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                 <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le texte</p>
                 <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
                   {/* 🚀 LE LIEN DE TRACKING EST INTÉGRÉ ICI */}
-                  {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 En savoir plus: ${typeof window !== 'undefined' ? window.location.origin : ''}/track/${trackingId || '...'}`}
+                  {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 En savoir plus: ${typeof window !== 'undefined' ? window.location.origin : ''}/track/${campaign.id}`}
                 </div>
                 <button onClick={async () => {
-                  const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/track/${trackingId || ''}`
+                  const link = `${typeof window !== 'undefined' ? window.location.origin : ''}/track/${campaign.id}`
                   await navigator.clipboard.writeText(`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 En savoir plus: ${link}`)
                   showToast('Texte copié !', 'success')
                 }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
