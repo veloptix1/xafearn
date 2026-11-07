@@ -66,27 +66,17 @@ export default function NewGroupPage() {
         avatarUrl = publicUrl
       }
 
-      // 2. Créer la conversation
-      const { data: newConv, error: convErr } = await supabase.from('conversations').insert({
-        is_group: true,
+      // 2. Appel de la fonction RPC pour créer le groupe et ajouter les participants
+      const { data: newConvId, error: rpcErr } = await supabase.rpc('create_group_conversation', {
         group_name: groupName.trim(),
         group_avatar_url: avatarUrl,
-        last_message: 'Groupe créé',
-        last_message_at: new Date().toISOString(),
-        last_message_sender_id: profile.id
-      }).select('id').single()
+        member_ids: selectedUsers
+      })
 
-      if (convErr) throw convErr
+      if (rpcErr) throw rpcErr
 
-      // 3. Ajouter les participants (le créateur est admin, + les invités)
-      const participants = [
-        { conversation_id: newConv.id, user_id: profile.id, is_admin: true },
-        ...selectedUsers.map(id => ({ conversation_id: newConv.id, user_id: id, is_admin: false }))
-      ]
-      const { error: partErr } = await supabase.from('conversation_participants').insert(participants)
-      if (partErr) throw partErr
-
-      router.push(`/dashboard/messages/${newConv.id}`)
+      // 3. Redirection vers le nouveau groupe
+      router.push(`/dashboard/messages/${newConvId}`)
     } catch (err: any) {
       alert('Erreur: ' + err.message)
     }
