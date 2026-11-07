@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: Request) {
   try {
-    // Vérifier le secret
     const auth = req.headers.get('authorization')
     if (auth !== `Bearer ${process.env.WEBHOOK_SECRET}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -14,13 +13,11 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid record' }, { status: 400 })
     }
 
-    // ✅ Utilisation de SUPABASE_SECRET_KEY (la variable de ton Vercel)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SECRET_KEY!
     )
 
-    // Trouver le destinataire
     const { data: conv } = await supabaseAdmin
       .from('conversations')
       .select('user1_id, user2_id')
@@ -31,14 +28,12 @@ export async function POST(req: Request) {
 
     const receiverId = conv.user1_id === record.sender_id ? conv.user2_id : conv.user1_id
 
-    // Nom de l'expéditeur
     const { data: sender } = await supabaseAdmin
       .from('profiles')
       .select('full_name')
       .eq('id', record.sender_id)
       .single()
 
-    // Envoyer la notification
     const baseUrl = new URL(req.url).origin
     await fetch(`${baseUrl}/api/send-push`, {
       method: 'POST',

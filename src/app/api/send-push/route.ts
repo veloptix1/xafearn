@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import webpush from 'web-push'
+import * as webpush from 'web-push'
 import { createClient } from '@supabase/supabase-js'
 
 // ✅ Tes clés VAPID
@@ -13,7 +13,6 @@ export async function POST(req: Request) {
   try {
     const { receiverId, title, body, url } = await req.json()
 
-    // ✅ Utilisation de SUPABASE_SECRET_KEY (la variable de ton Vercel)
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SECRET_KEY!
