@@ -1,5 +1,3 @@
-cat > src/app/dashboard/messages/\[id\]/page.tsx << 'EOF'
-'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
@@ -15,13 +13,11 @@ function Toast({ message, onClose }: { message: string, onClose: () => void }) {
   return <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[300] px-5 py-3 bg-slate-900 text-white text-sm font-medium rounded-full shadow-xl animate-in fade-in slide-in-from-bottom-4">{message}</div>
 }
 
-// 🎨 Icônes SVG (Nouvelles icônes pour l'audio/vidéo)
 const Icons = {
   Play: () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>,
   Pause: () => <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>,
   Download: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>,
   Link: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>,
-  // ... (autres icônes inchangées)
   Phone: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>,
   Video: () => <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>,
   Search: () => <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>,
@@ -47,7 +43,6 @@ const TypingDots = () => (
   </div>
 )
 
-// 🎵 Composant Audio personnalisé
 function AudioPlayer({ src, isMe }: { src: string, isMe: boolean }) {
   const audioRef = useRef<HTMLAudioElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -383,7 +378,6 @@ export default function ChatPage() {
     return parts.map((part, i) => part.toLowerCase() === query.toLowerCase() ? <mark key={i} className="bg-yellow-300 text-slate-900 rounded px-0.5">{part}</mark> : part)
   }
 
-  // 🔗 Rendu du contenu du message (Texte + Liens + Aperçu)
   const renderContent = (m: any) => {
     const text = m.content || ''
     const urlRegex = /(https?:\/\/[^\s]+)/g
@@ -392,8 +386,6 @@ export default function ChatPage() {
     return (
       <div className="break-words">
         <p className="whitespace-pre-wrap leading-relaxed">{highlightText(text, isSearching ? searchQuery : '')}</p>
-        
-        {/* 🔗 Aperçu du lien */}
         {urls && (
           <a href={urls[0]} target="_blank" rel="noopener noreferrer" className={`block mt-2 rounded-xl border overflow-hidden shadow-sm hover:opacity-90 transition ${m.sender_id === profile?.id ? 'bg-sky-600/40 border-sky-400/50' : 'bg-slate-50 border-slate-200'}`}>
             <div className="flex items-center gap-2 p-3">
@@ -486,20 +478,13 @@ export default function ChatPage() {
                         </div>
                       )}
                       
-                      {/* 🖼️ Affichage Image */}
                       {m.message_type === 'image' && m.media_url ? (
                         <img src={m.media_url} alt="Image" className="rounded-lg max-h-64 w-auto object-cover" loading="lazy" />
-                      ) : 
-                      /* 🎵 Affichage Audio */
-                      m.message_type === 'audio' && m.media_url ? (
+                      ) : m.message_type === 'audio' && m.media_url ? (
                         <AudioPlayer src={m.media_url} isMe={isMe} />
-                      ) : 
-                      /* 📹 Affichage Vidéo */
-                      m.message_type === 'video' && m.media_url ? (
+                      ) : m.message_type === 'video' && m.media_url ? (
                         <video src={m.media_url} controls className="rounded-lg max-h-64 w-auto bg-black" />
-                      ) :
-                      /* 📎 Affichage Fichier */
-                      m.message_type === 'file' && m.media_url ? (
+                      ) : m.message_type === 'file' && m.media_url ? (
                         <a href={m.media_url} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2.5 p-1 rounded-lg ${isMe ? 'text-white' : 'text-sky-600'}`}>
                           <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${isMe ? 'bg-white/20' : 'bg-sky-50'}`}><Icons.File /></div>
                           <div className="min-w-0 flex-1">
@@ -507,14 +492,11 @@ export default function ChatPage() {
                             <p className={`text-[10px] ${isMe ? 'text-sky-100' : 'text-slate-500'}`}>Appuyer pour télécharger</p>
                           </div>
                         </a>
-                      ) : 
-                      /* 📍 Localisation */
-                      m.message_type === 'location' ? (
+                      ) : m.message_type === 'location' ? (
                         <a href={m.content} target="_blank" rel="noopener noreferrer" className={`flex items-center gap-2 underline ${isMe ? 'text-white' : 'text-sky-600'}`}>
                           <Icons.Location /> <span className="text-xs">Ouvrir la carte</span>
                         </a>
                       ) : (
-                        /* 💬 Texte + Lien */
                         renderContent(m)
                       )}
                       
@@ -650,7 +632,7 @@ export default function ChatPage() {
                 <button onClick={() => deleteMessage(longPressMessage)} className="flex flex-col items-center gap-1 p-2 rounded-xl hover:bg-red-50">
                   <div className="w-10 h-10 bg-red-100 text-red-600 rounded-full flex items-center justify-center"><Icons.Trash /></div>
                   <span className="text-[10px] font-medium text-red-600">Supprimer</span>
-                </button>
+                </a>
               )}
             </div>
             <button onClick={() => setLongPressMessage(null)} className="w-full py-3 mt-2 bg-slate-100 text-slate-700 font-bold rounded-xl text-sm">Annuler</button>
@@ -660,4 +642,3 @@ export default function ChatPage() {
     </main>
   )
 }
-EOF
