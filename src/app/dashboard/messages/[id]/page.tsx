@@ -100,7 +100,7 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true)
   const [messages, setMessages] = useState<any[]>([])
   const [profile, setProfile] = useState<any>(null)
-  const [otherUser, setOtherUser] = useState<any>(null) // Sera le groupe si isGroup = true
+  const [otherUser, setOtherUser] = useState<any>(null)
   const [isGroup, setIsGroup] = useState(false)
   const [newMessage, setNewMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -466,7 +466,7 @@ export default function ChatPage() {
               <div className="w-9 h-9 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0"><svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg></div>
             )}
             {isGroup && (
-              <button onClick={() => router.push(`/dashboard/messages/${conversationId}/info`)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Info /></button>
+              <button onClick={() => router.push(`/dashboard/messages/${conversationId}/settings`)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Info /></button>
             )}
             <button onClick={() => setIsSearchOpen(true)} className="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-slate-500 shrink-0"><Icons.Search /></button>
           </>
