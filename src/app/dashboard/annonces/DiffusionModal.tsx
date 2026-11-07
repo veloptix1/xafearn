@@ -13,7 +13,9 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   const [uploading, setUploading] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
   const [localSubmission, setLocalSubmission] = useState<any>(submission)
-
+  const [trackingId, setTrackingId] = useState<string | null>(null)
+  const [creatingTracking, setCreatingTracking] = useState(false)
+  
   const supabase = createClient()
   const router = useRouter()
 
@@ -26,46 +28,55 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     async function refresh() {
       const { data } = await supabase.from('ad_submissions').select('*').eq('campaign_id', campaign.id).eq('user_id', userId).maybeSingle()
       setLocalSubmission(data)
+      if (data?.tracking_id) setTrackingId(data.tracking_id)
     }
     refresh()
-  }, [campaign.id, userId, submission])
+  }, [campaign.id, userId, submission, supabase])
 
-  // 🚀 ÉTAPE 1 : "J'ai publié" → Enregistre la soumission avec statut 'en_attente_proof'
-  const handlePublishedClick = async () => {
+  const trackingLink = typeof window !== 'undefined' && trackingId ? `${window.location.origin}/track/${trackingId}` : ''
+
+  // 🚀 Génère l'ID et le lien dès l'ouverture du modal (si pas encore fait)
+  const handleGenerateLink = async () => {
+    setCreatingTracking(true)
     try {
-      const { data, error } = await supabase.from('ad_submissions').insert({
-        campaign_id: campaign.id,
-        user_id: userId,
-        tracking_id: Math.random().toString(36).substring(2, 10),
-        status: 'en_attente_proof', // 🚀 Statut intermédiaire, sans vidéo
-      }).select().single()
-
-      if (error) throw error
-
-      setLocalSubmission(data)
-      setIsOpen(false)
-      showToast('Publication enregistrée ! Envoie maintenant ta preuve.', 'success')
-      router.refresh()
+      const newTrackingId = Math.random().toString(36).substring(2, 12)
+      
+      // Si la soumission existe déjà, on met juste à jour le tracking_id
+      if (localSubmission) {
+        const { data, error } = await supabase.from('ad_submissions').update({ tracking_id: newTrackingId }).eq('id', localSubmission.id).select().single()
+        if (error) throw error
+        setTrackingId(newTrackingId)
+        setLocalSubmission(data)
+      } else {
+        // Sinon on crée une nouvelle soumission en attente
+        const { data, error } = await supabase.from('ad_submissions').insert({
+          campaign_id: campaign.id,
+          user_id: userId,
+          tracking_id: newTrackingId,
+          status: 'en_attente_proof',
+        }).select().single()
+        if (error) throw error
+        setTrackingId(newTrackingId)
+        setLocalSubmission(data)
+      }
+      showToast('Lien généré ! Copie le message complet.', 'success')
     } catch (err: any) {
       showToast('Erreur : ' + err.message, 'error')
     }
+    setCreatingTracking(false)
   }
 
-  // 🚀 ÉTAPE 2 : Ouvrir le modal d'upload
-  const handleOpenUpload = () => {
+  const handlePublishedClick = () => {
     setStep('upload')
-    setIsOpen(true)
-    setVideoFile(null)
-    setConfirmed(false)
+    showToast('Publication enregistrée. Envoie ta preuve après 18h.', 'success')
   }
 
-  // 🚀 ÉTAPE 3 : Envoyer la preuve → Mise à jour avec la vidéo et statut 'pending'
   const handleUploadProof = async () => {
     if (!confirmed) return showToast('Tu dois confirmer que ton statut a au moins 18h.', 'warning')
     if (!videoFile) return showToast('Sélectionne une vidéo.', 'warning')
     if (videoFile.size > 50 * 1024 * 1024) return showToast('Max 50 MB.', 'error')
     if (!videoFile.type.startsWith('video/')) return showToast('Doit être une vidéo.', 'error')
-
+    
     setUploading(true)
     try {
       const fileName = `proof-${userId}-${Date.now()}.mp4`
@@ -74,7 +85,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
 
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-      // Mettre à jour la soumission existante
       const { data, error } = await supabase.from('ad_submissions').update({
         proof_video_url: publicUrl,
         proof_type: 'video',
@@ -93,7 +103,6 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     setUploading(false)
   }
 
-  // 🎨 CALCUL DE L'ÉTAT
   const state = !localSubmission ? 'not_published' : 
                 localSubmission.status === 'validated' ? 'validated' :
                 localSubmission.status === 'rejected' ? 'rejected' :
@@ -114,23 +123,18 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   if (state === 'rejected') {
     return (
       <>
-        <button onClick={handleOpenUpload} className="w-full py-3 text-sm font-bold rounded-xl bg-red-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
+        <button onClick={() => { setIsOpen(true); setStep('upload') }} className="w-full py-3 text-sm font-bold rounded-xl bg-red-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg>
           Preuve rejetée - Recommencer
         </button>
-
         {isOpen && step === 'upload' && (
-          <UploadModal
-            title="Nouvelle preuve"
+          <UploadModal 
+            title="Nouvelle preuve" 
             description="Ta preuve précédente a été rejetée. Envoie une nouvelle vidéo."
-            confirmed={confirmed}
-            setConfirmed={setConfirmed}
-            videoFile={videoFile}
-            setVideoFile={setVideoFile}
-            uploading={uploading}
-            onClose={() => setIsOpen(false)}
-            onSubmit={handleUploadProof}
-            toast={toast}
+            confirmed={confirmed} setConfirmed={setConfirmed}
+            videoFile={videoFile} setVideoFile={setVideoFile}
+            uploading={uploading} onClose={() => setIsOpen(false)}
+            onSubmit={handleUploadProof} toast={toast} 
             buttonText="Envoyer ma nouvelle preuve"
           />
         )}
@@ -148,27 +152,22 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
     )
   }
 
-  // 🟢 PRÊT À ENVOYER LA PREUVE (statut en_attente_proof)
+  // 🟢 PRÊT À ENVOYER LA PREUVE
   if (state === 'ready_to_prove') {
     return (
       <>
-        <button onClick={handleOpenUpload} className="w-full py-3 text-sm font-bold rounded-xl bg-sky-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
+        <button onClick={() => { setIsOpen(true); setStep('upload') }} className="w-full py-3 text-sm font-bold rounded-xl bg-sky-500 text-white active:scale-95 transition shadow-md flex justify-center items-center gap-2">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
           Vérifier & Envoyer ma preuve
         </button>
-
         {isOpen && step === 'upload' && (
-          <UploadModal
-            title="Envoyer ma preuve"
+          <UploadModal 
+            title="Envoyer ma preuve" 
             description="Assure-toi que ton statut a été publié il y a au moins 18 heures."
-            confirmed={confirmed}
-            setConfirmed={setConfirmed}
-            videoFile={videoFile}
-            setVideoFile={setVideoFile}
-            uploading={uploading}
-            onClose={() => setIsOpen(false)}
-            onSubmit={handleUploadProof}
-            toast={toast}
+            confirmed={confirmed} setConfirmed={setConfirmed}
+            videoFile={videoFile} setVideoFile={setVideoFile}
+            uploading={uploading} onClose={() => setIsOpen(false)}
+            onSubmit={handleUploadProof} toast={toast} 
             buttonText="Envoyer ma preuve"
           />
         )}
@@ -179,7 +178,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
   // 🔵 PAS ENCORE PUBLIÉ
   return (
     <>
-      <button onClick={() => { setIsOpen(true); setStep('details'); }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
+      <button onClick={() => { setIsOpen(true); setStep('details') }} className="w-full py-3 text-sm font-bold rounded-xl bg-slate-900 text-white active:scale-95 transition flex justify-center items-center gap-2">
         Diffuser cette annonce
       </button>
 
@@ -191,7 +190,7 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
                 {toast.message}
               </div>
             )}
-
+            
             <div className="flex justify-between items-center mb-4">
               <h2 className="font-bold text-lg">Publier cette annonce</h2>
               <button onClick={() => setIsOpen(false)} className="p-2 bg-slate-100 rounded-full text-slate-500">
@@ -200,41 +199,67 @@ export default function DiffusionModal({ campaign, userId, submission }: { campa
             </div>
 
             <div className="space-y-4">
-              <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">1. Télécharge l'image</p>
-                <button onClick={async () => {
-                  const response = await fetch(campaign.image_url)
-                  const blob = await response.blob()
-                  const url = window.URL.createObjectURL(blob)
-                  const link = document.createElement('a')
-                  link.href = url
-                  link.download = `annonce.jpg`
-                  link.click()
-                  showToast('Image téléchargée !', 'success')
-                }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl active:bg-slate-200 transition">
-                  Télécharger l'image
+              
+              {/* 🚀 ÉTAPE 1 : GÉNÉRER LE LIEN (seulement si pas encore généré) */}
+              {!trackingId ? (
+                <button onClick={handleGenerateLink} disabled={creatingTracking} className="w-full py-4 bg-indigo-500 text-white font-bold rounded-xl active:scale-95 transition disabled:opacity-50">
+                  {creatingTracking ? 'Génération en cours...' : '1. Générer mon lien de tracking'}
                 </button>
-              </div>
+              ) : (
+                <>
+                  {/* 🚀 ÉTAPE 2 : TÉLÉCHARGER L'IMAGE */}
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 mb-2">1. Télécharge l'image</p>
+                    <button onClick={async () => {
+                      const response = await fetch(campaign.image_url)
+                      const blob = await response.blob()
+                      const url = window.URL.createObjectURL(blob)
+                      const link = document.createElement('a')
+                      link.href = url
+                      link.download = `annonce.jpg`
+                      link.click()
+                      showToast('Image téléchargée !', 'success')
+                    }} className="w-full py-2.5 bg-slate-100 text-slate-700 font-semibold text-sm rounded-xl active:bg-slate-200 transition">
+                      Télécharger l'image
+                    </button>
+                  </div>
 
-              <div>
-                <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le texte</p>
-                <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2">
-                  {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`}
-                </div>
-                <button onClick={async () => {
-                  await navigator.clipboard.writeText(`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F`)
-                  showToast('Texte copié !', 'success')
-                }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
-                  Copier le texte
-                </button>
-              </div>
+                  {/* 🚀 ÉTAPE 3 : COPIER LE TEXTE COMPLET (avec le lien inclus) */}
+                  <div>
+                    <p className="text-sm font-bold text-slate-900 mb-2">2. Copie le message complet</p>
+                    <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 whitespace-pre-wrap font-mono mb-2 max-h-40 overflow-y-auto">
+                      {`${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 En savoir plus: ${trackingLink}`}
+                    </div>
+                    <button onClick={async () => {
+                      const textToCopy = `${campaign.title}\n\n${campaign.description}\n\nPrix: ${campaign.price} F\n\n👉 En savoir plus: ${trackingLink}`
+                      await navigator.clipboard.writeText(textToCopy)
+                      showToast('Message copié !', 'success')
+                    }} className="w-full py-2.5 bg-sky-50 text-sky-600 font-semibold text-sm rounded-xl active:bg-sky-100 transition">
+                      📋 Copier le message complet
+                    </button>
+                  </div>
 
-              <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
-                J'ai publié sur mon statut
-              </button>
+                  {/* 🚀 ÉTAPE 4 : CONFIRMER LA PUBLICATION */}
+                  <button onClick={handlePublishedClick} className="w-full py-4 bg-emerald-500 text-white font-bold rounded-xl active:scale-95 transition shadow-md">
+                    J'ai publié sur mon statut
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>
+      )}
+
+      {isOpen && step === 'upload' && (
+        <UploadModal 
+          title="Envoyer ma preuve" 
+          description="Assure-toi que ton statut a été publié il y a au moins 18 heures."
+          confirmed={confirmed} setConfirmed={setConfirmed}
+          videoFile={videoFile} setVideoFile={setVideoFile}
+          uploading={uploading} onClose={() => setIsOpen(false)}
+          onSubmit={handleUploadProof} toast={toast} 
+          buttonText="Envoyer ma preuve"
+        />
       )}
     </>
   )
@@ -250,7 +275,7 @@ function UploadModal({ title, description, confirmed, setConfirmed, videoFile, s
             {toast.message}
           </div>
         )}
-
+        
         <div className="flex justify-between items-center mb-4">
           <h2 className="font-bold text-lg">{title}</h2>
           <button onClick={onClose} className="p-2 bg-slate-100 rounded-full text-slate-500">
