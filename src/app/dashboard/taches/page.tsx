@@ -44,20 +44,18 @@ export default function TasksPage() {
 
         // Vérifier le bonus quotidien si Premium
         if (prof?.is_premium) {
-          const todayStart = new Date()
-          todayStart.setHours(0, 0, 0, 0)
-          
+          const todayStr = new Date().toISOString().split('T')[0]
           const { data: bonusClaim } = await supabase
             .from('daily_bonus_claims')
             .select('id')
             .eq('user_id', user.id)
-            .gte('claimed_at', todayStart.toISOString())
+            .eq('claim_date', todayStr)
             .maybeSingle()
           
           setCanClaimBonus(!bonusClaim)
         }
 
-        // Charger les tâches actives (normales + campagnes)
+        // Charger les tâches
         const { data: t } = await supabase.from('tasks').select('*').eq('status', 'active')
         const { data: c } = await supabase.from('campaigns').select('*').eq('status', 'active').eq('display_type', 'task')
 
@@ -74,7 +72,7 @@ export default function TasksPage() {
         ]
         setTasks(combined)
 
-        // Charger les soumissions de l'utilisateur
+        // Charger les soumissions
         const { data: subs } = await supabase
           .from('task_submissions')
           .select('*')
@@ -90,13 +88,17 @@ export default function TasksPage() {
     load()
   }, [router, supabase])
 
-  // 🎁 Réclamer le bonus quotidien
   const claimDailyBonus = async () => {
     if (!profile || !canClaimBonus || claimingBonus) return
     setClaimingBonus(true)
     try {
+      const todayStr = new Date().toISOString().split('T')[0]
+      
       // 1. Enregistrer le bonus
-      const { error: claimErr } = await supabase.from('daily_bonus_claims').insert({ user_id: profile.id })
+      const { error: claimErr } = await supabase.from('daily_bonus_claims').insert({ 
+        user_id: profile.id, 
+        claim_date: todayStr 
+      })
       if (claimErr) throw claimErr
 
       // 2. Ajouter 50 jetons
@@ -122,12 +124,10 @@ export default function TasksPage() {
     }
   }
 
-  // 🚀 Démarrer une tâche
   const startTask = (task: any) => {
     if (isTestModeActive) {
       return showToast('Termine d\'abord ton annonce test pour débloquer les tâches.', 'warning')
     }
-    // Vérifier si déjà soumis
     const existingSub = submissions.find(s => s.task_id === task.id)
     if (existingSub) {
       return showToast('Tu as déjà soumis une preuve pour cette tâche.', 'warning')
@@ -140,21 +140,18 @@ export default function TasksPage() {
     }
   }
 
-  // 📸 Soumettre la preuve
   const submitProof = async () => {
     if (!screenshot) return showToast('Veuillez uploader une capture d\'écran.', 'warning')
     if (!profile || !activeTask) return
     
     setUploading(true)
     try {
-      // 1. Upload de l'image
       const fileName = `task-proof-${profile.id}-${activeTask.id}-${Date.now()}.jpg`
       const { error: uploadError } = await supabase.storage.from('proof-videos').upload(fileName, screenshot)
       if (uploadError) throw uploadError
       
       const { data: { publicUrl } } = supabase.storage.from('proof-videos').getPublicUrl(fileName)
 
-      // 2. Enregistrer la soumission
       const { error } = await supabase.from('task_submissions').insert({
         task_id: activeTask.id,
         user_id: profile.id,
@@ -167,7 +164,6 @@ export default function TasksPage() {
         throw error
       }
 
-      // 3. Mettre à jour l'état local
       setSubmissions([...submissions, { task_id: activeTask.id, status: 'pending' }])
       showToast('Preuve envoyée ! En attente de validation.', 'success')
       setActiveTask(null)
@@ -200,7 +196,6 @@ export default function TasksPage() {
 
       <div className="p-4 md:p-8 max-w-lg mx-auto mt-4 space-y-4">
         
-        {/* 🎁 Carte Bonus Quotidien */}
         {profile?.is_premium && (
           <div className={`rounded-3xl p-5 shadow-md flex items-center justify-between transition ${canClaimBonus ? 'bg-gradient-to-r from-purple-500 to-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-900'}`}>
             <div>
@@ -213,11 +208,7 @@ export default function TasksPage() {
               </p>
             </div>
             {canClaimBonus ? (
-              <button 
-                onClick={claimDailyBonus} 
-                disabled={claimingBonus}
-                className="bg-white text-purple-600 font-bold text-xs px-4 py-2 rounded-xl shadow-sm active:scale-95 transition disabled:opacity-50"
-              >
+              <button onClick={claimDailyBonus} disabled={claimingBonus} className="bg-white text-purple-600 font-bold text-xs px-4 py-2 rounded-xl shadow-sm active:scale-95 transition disabled:opacity-50">
                 {claimingBonus ? '...' : 'Réclamer'}
               </button>
             ) : (
@@ -226,7 +217,6 @@ export default function TasksPage() {
           </div>
         )}
 
-        {/* Blocage si mode test */}
         {isTestModeActive && (
           <div className="bg-amber-50 border border-amber-200 p-5 rounded-2xl text-center">
             <div className="w-12 h-12 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -246,7 +236,6 @@ export default function TasksPage() {
           <p className="text-sky-100 text-sm relative z-10">Accomplis des missions simples et reçois de l'argent après validation.</p>
         </div>
 
-        {/* Liste des tâches */}
         {tasks.length === 0 ? (
           <div className="bg-white p-8 rounded-3xl text-center text-slate-500 border border-slate-200">
             <p className="font-medium">Aucune tâche disponible pour le moment.</p>
@@ -314,7 +303,6 @@ export default function TasksPage() {
         )}
       </div>
 
-      {/* Modal de preuve */}
       {activeTask && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6">

@@ -12,6 +12,7 @@ export default function ActivationPage() {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [profile, setProfile] = useState<any>(null)
+  const [activationPrice, setActivationPrice] = useState(2000)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null)
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => setToast({ message: msg, type })
@@ -20,8 +21,15 @@ export default function ActivationPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
+      
+      // Charger le profil
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(data)
+      
+      // Charger le prix d'activation dynamique
+      const { data: setting } = await supabase.from('app_settings').select('value').eq('key', 'activation_price').single()
+      if (setting) setActivationPrice(parseInt(setting.value))
+      
       setLoading(false)
     }
     load()
@@ -29,31 +37,19 @@ export default function ActivationPage() {
 
   const activateAccount = async () => {
     if (!profile) return
-    if ((profile.balance || 0) < 2000) {
-      return showToast('Solde insuffisant. Il te faut 2000 FCFA.', 'error')
+    if ((profile.balance || 0) < activationPrice) {
+      return showToast(`Solde insuffisant. Il te faut ${activationPrice} FCFA.`, 'error')
     }
-    if (!confirm('Confirmer l\'activation de ton compte Premium pour 2000 FCFA ?')) return
+    if (!confirm(`Confirmer l'activation de ton compte Premium pour ${activationPrice} FCFA ?`)) return
 
     setProcessing(true)
     try {
-      // 1. Déduire 2000 FCFA
-      await supabase.from('profiles').update({ balance: profile.balance - 2000 }).eq('id', profile.id)
+      // Appel de la fonction RPC sécurisée
+      const { data, error } = await supabase.rpc('activate_premium_account', { p_user_id: profile.id })
       
-      // 2. Activer le compte Premium
-      await supabase.from('profiles').update({ 
-        is_premium: true, 
-        premium_activated_at: new Date().toISOString() 
-      }).eq('id', profile.id)
+      if (error) throw error
 
-      // 3. Enregistrer la transaction
-      await supabase.from('coin_conversions').insert({
-        user_id: profile.id,
-        coins_converted: 0,
-        fcfc_received: -2000,
-        commission: 0
-      })
-
-      // 4. Notification
+      // Notification locale
       await supabase.from('notifications').insert({
         user_id: profile.id,
         title: 'Compte Activé ! 🎉',
@@ -118,8 +114,8 @@ export default function ActivationPage() {
                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7" /></svg>
               </div>
               <div>
-                <p className="font-bold text-slate-900 text-sm">Parrainage sur 3 niveaux</p>
-                <p className="text-xs text-slate-500">Gagne de l'argent en invitant tes amis (N1, N2, N3).</p>
+                <p className="font-bold text-slate-900 text-sm">Parrainage (Niveau 1, 2, 3)</p>
+                <p className="text-xs text-slate-500">Gagne 50% au N1, 25% au N2, 10% au N3 sur l'activation de tes filleuls.</p>
               </div>
             </li>
           </ul>
@@ -128,11 +124,11 @@ export default function ActivationPage() {
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
           <div className="flex items-center justify-between mb-4">
             <span className="text-slate-500 font-medium">Frais d'activation</span>
-            <span className="text-2xl font-black text-slate-900">2 000 F</span>
+            <span className="text-2xl font-black text-slate-900">{activationPrice.toLocaleString('fr-FR')} F</span>
           </div>
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
             <span className="text-slate-500 font-medium">Ton solde</span>
-            <span className={`text-xl font-black ${(profile?.balance || 0) >= 2000 ? 'text-emerald-600' : 'text-red-500'}`}>
+            <span className={`text-xl font-black ${(profile?.balance || 0) >= activationPrice ? 'text-emerald-600' : 'text-red-500'}`}>
               {profile?.balance?.toLocaleString('fr-FR') || 0} F
             </span>
           </div>
@@ -144,21 +140,14 @@ export default function ActivationPage() {
           ) : (
             <button 
               onClick={activateAccount} 
-              disabled={processing || (profile?.balance || 0) < 2000}
+              disabled={processing || (profile?.balance || 0) < activationPrice}
               className="w-full py-4 bg-slate-900 text-white font-bold rounded-xl shadow-lg disabled:opacity-50 transition flex items-center justify-center gap-2"
             >
-              {processing ? (
-                'Activation...'
-              ) : (
-                <>
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  Activer mon compte (2 000 F)
-                </>
-              )}
+              {processing ? 'Activation...' : `Activer mon compte (${activationPrice.toLocaleString('fr-FR')} F)`}
             </button>
           )}
           
-          {(profile?.balance || 0) < 2000 && !profile?.is_premium && (
+          {(profile?.balance || 0) < activationPrice && !profile?.is_premium && (
             <Link href="/dashboard/jetons/acheter" className="block text-center text-xs text-sky-600 font-bold mt-3">
               Recharger mon solde →
             </Link>
