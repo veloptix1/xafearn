@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import NotificationBell from '@/components/NotificationBell'
 import WelcomePopup from '@/components/WelcomePopup'
+import BottomNav from '@/components/BottomNav'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -26,7 +27,7 @@ export default function DashboardPage() {
         setProfile(data)
         setIsAnnonceurMode(data.role === 'annonceur')
         
-        // 🚀 Afficher la popup uniquement à la CONNEXION (pas à chaque reload)
+        // Popup une seule fois par session
         const hasSeenPopup = sessionStorage.getItem('hasSeenSeriesPopup')
         if (!hasSeenPopup) {
           setTimeout(() => {
@@ -50,7 +51,7 @@ export default function DashboardPage() {
     <main className="min-h-screen bg-slate-50 pb-24">
       <WelcomePopup />
       
-      {/* 🚀 POPUP SÉRIES (une seule fois par session) */}
+      {/* POPUP SÉRIES (une seule fois par session) */}
       {showSeriesPopup && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <div className="bg-white rounded-3xl w-full max-w-sm p-6 relative shadow-2xl overflow-hidden">
@@ -114,7 +115,26 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            {/* Services (Grille) */}
+            {/* 🚀 CARTE NIVEAU */}
+            <Link href="/dashboard/niveaux" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm flex items-center justify-between active:bg-slate-50 transition">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z" /></svg>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Niveau Actuel</p>
+                  <p className="text-lg font-black text-slate-900">Niveau {profile?.level || 1}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-lg border border-emerald-100">
+                  {profile?.level === 1 ? '0,50 F/vue' : profile?.level === 2 ? '1,25 F/vue' : '1,75 F/vue'}
+                </span>
+                <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+              </div>
+            </Link>
+
+            {/* Services */}
             <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider px-1 pt-2">Services</h2>
             <div className="grid grid-cols-2 gap-3">
               
@@ -167,15 +187,6 @@ export default function DashboardPage() {
                 <p className="text-[10px] text-slate-500">Missions rémunérées</p>
               </Link>
 
-              <Link href="/dashboard/coffres" className="block bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 p-4 rounded-2xl shadow-sm relative overflow-hidden active:scale-95 transition">
-                <div className="absolute top-0 right-0 bg-amber-500 text-white text-[8px] font-bold px-2 py-0.5 rounded-bl-lg">NEW</div>
-                <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600 mb-3">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                </div>
-                <h3 className="font-bold text-amber-900 text-sm">Trésors</h3>
-                <p className="text-[10px] text-amber-600">Gagne des coffres</p>
-              </Link>
-
               <Link href="/dashboard/jetons/acheter" className="block bg-white border border-slate-200 p-4 rounded-2xl shadow-sm active:bg-slate-50 transition">
                 <div className="w-10 h-10 bg-rose-50 rounded-xl flex items-center justify-center text-rose-500 mb-3">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
@@ -196,31 +207,11 @@ export default function DashboardPage() {
                 + Créer une campagne
               </Link>
             </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Link href="/dashboard/annonceur/analytics" className="block bg-white border border-slate-200 p-5 rounded-2xl shadow-sm active:bg-slate-50 transition">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-500">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
-                  </div>
-                  <h3 className="font-bold text-slate-900">Tableau de bord</h3>
-                </div>
-                <p className="text-sm text-slate-500">Suis les performances de tes campagnes.</p>
-              </Link>
-
-              <Link href="/dashboard/annonces" className="block bg-white border border-slate-200 p-5 rounded-2xl shadow-sm active:bg-slate-50 transition">
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" /></svg>
-                  </div>
-                  <h3 className="font-bold text-slate-900">Mes campagnes</h3>
-                </div>
-                <p className="text-sm text-slate-500">Voir et gérer toutes tes annonces.</p>
-              </Link>
-            </div>
           </div>
         )}
       </div>
+
+      <BottomNav />
     </main>
   )
 }
