@@ -31,14 +31,17 @@ export default function PartnerDashboard() {
   
   const [loading, setLoading] = useState(true)
   const [profile, setProfile] = useState<any>(null)
-  const [apiKey, setApiKey] = useState<any>(null)
+  const [apiKeys, setApiKeys] = useState<any[]>([])
+  const [activeKey, setActiveKey] = useState<any>(null)
   const [showKey, setShowKey] = useState(false)
-  const [selectedScopes, setSelectedScopes] = useState<string[]>([])
-  const [appName, setAppName] = useState('')
-  const [isCreating, setIsCreating] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [stats, setStats] = useState({ calls: 0, webhooks: 0 })
+  const [isCreating, setIsCreating] = useState(false)
+  const [showCreateForm, setShowCreateForm] = useState(false)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' } | null>(null)
+  
+  // Formulaire de création
+  const [appName, setAppName] = useState('')
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([])
 
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'info') => setToast({ message: msg, type })
 
@@ -50,18 +53,9 @@ export default function PartnerDashboard() {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(prof)
 
-      const { data: keys } = await supabase.from('api_keys').select('*').eq('partner_id', user.id).order('created_at', { ascending: false }).limit(1)
-      
-      if (keys && keys.length > 0) {
-        setApiKey(keys[0])
-        setSelectedScopes(keys[0].scopes || [])
-        setAppName(keys[0].name)
-
-        // Charger les stats
-        const { count: callsCount } = await supabase.from('api_logs').select('*', { count: 'exact', head: true }).eq('api_key_id', keys[0].id)
-        const { count: webhooksCount } = await supabase.from('api_webhooks').select('*', { count: 'exact', head: true }).eq('api_key_id', keys[0].id)
-        setStats({ calls: callsCount || 0, webhooks: webhooksCount || 0 })
-      }
+      const { data: keys } = await supabase.from('api_keys').select('*').eq('partner_id', user.id).order('created_at', { ascending: false })
+      setApiKeys(keys || [])
+      if (keys && keys.length > 0) setActiveKey(keys[0])
 
       setLoading(false)
     }
@@ -80,20 +74,39 @@ export default function PartnerDashboard() {
       }).select().single()
 
       if (error) throw error
-      setApiKey(data)
-      showToast('Clé API générée avec succès !', 'success')
+      
+      setApiKeys([data, ...apiKeys])
+      setActiveKey(data)
+      setShowCreateForm(false)
+      setAppName('')
+      setSelectedScopes([])
+      showToast('Nouvelle clé API générée !', 'success')
     } catch (err: any) {
       showToast('Erreur : ' + err.message, 'error')
     }
     setIsCreating(false)
   }
 
+  const revokeKey = async (id: string) => {
+    if (!confirm('Supprimer définitivement cette clé ? Les applications qui l\'utilisent cesseront de fonctionner.')) return
+    try {
+      const { error } = await supabase.from('api_keys').delete().eq('id', id)
+      if (error) throw error
+      const newKeys = apiKeys.filter(k => k.id !== id)
+      setApiKeys(newKeys)
+      setActiveKey(newKeys.length > 0 ? newKeys[0] : null)
+      showToast('Clé supprimée.', 'success')
+    } catch (err: any) {
+      showToast('Erreur : ' + err.message, 'error')
+    }
+  }
+
   const toggleScope = (id: string) => {
     setSelectedScopes(prev => prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id])
   }
 
-  const copyKey = () => {
-    navigator.clipboard.writeText(apiKey.api_key)
+  const copyKey = (key: string) => {
+    navigator.clipboard.writeText(key)
     showToast('Clé copiée !', 'success')
   }
 
@@ -153,40 +166,22 @@ export default function PartnerDashboard() {
           <div className="relative z-10 flex justify-between items-center">
             <div>
               <h2 className="text-2xl font-black mb-1">Bienvenue {profile?.full_name?.split(' ')[0]} 🚀</h2>
-              <p className="text-indigo-100 text-sm">Gère ton accès à l'API Xafearn.</p>
+              <p className="text-indigo-100 text-sm">Gère tes applications et tes accès API.</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs font-bold text-indigo-100 uppercase">Crédits</p>
-              <p className="text-4xl font-black">{apiKey?.credits || 0}</p>
-            </div>
+            <button onClick={() => setShowCreateForm(true)} className="bg-white text-indigo-600 font-bold text-sm px-4 py-2.5 rounded-xl shadow-md active:scale-95 transition">
+              + Nouvelle application
+            </button>
           </div>
         </div>
 
-        {/* Stats rapides */}
-        {apiKey && (
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-              <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Appels API</p>
-              <p className="text-2xl font-black text-slate-900">{stats.calls}</p>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-              <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Webhooks</p>
-              <p className="text-2xl font-black text-slate-900">{stats.webhooks}</p>
-            </div>
-            <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-200">
-              <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Scopes</p>
-              <p className="text-2xl font-black text-slate-900">{apiKey.scopes?.length || 0}</p>
-            </div>
-          </div>
-        )}
-
-        {!apiKey ? (
+        {/* Formulaire de création */}
+        {showCreateForm && (
           <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-            <h3 className="font-bold text-slate-900 mb-4">Créer ta clé API</h3>
+            <h3 className="font-bold text-slate-900 mb-4">Créer une nouvelle application</h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nom de ton application</label>
-                <input type="text" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ex: MonSiteDeJeux" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" />
+                <label className="block text-xs font-bold text-slate-600 uppercase mb-1">Nom de l'application</label>
+                <input type="text" value={appName} onChange={e => setAppName(e.target.value)} placeholder="Ex: MonSiteWeb" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-indigo-500" />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-600 uppercase mb-2">Scopes (autorisations)</label>
@@ -202,40 +197,72 @@ export default function PartnerDashboard() {
                   ))}
                 </div>
               </div>
-              <button onClick={generateKey} disabled={isCreating} className="w-full py-4 bg-indigo-500 text-white font-bold rounded-xl disabled:opacity-50 shadow-md active:scale-95 transition">
-                {isCreating ? 'Génération...' : 'Générer ma clé API'}
-              </button>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setShowCreateForm(false)} className="flex-1 py-3 bg-slate-100 text-slate-700 font-bold rounded-xl">Annuler</button>
+                <button onClick={generateKey} disabled={isCreating} className="flex-1 py-3 bg-indigo-500 text-white font-bold rounded-xl shadow-md disabled:opacity-50">
+                  {isCreating ? 'Génération...' : 'Générer la clé'}
+                </button>
+              </div>
             </div>
           </div>
-        ) : (
-          <>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold text-slate-900">Ta clé API</h3>
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${apiKey.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{apiKey.is_active ? 'Active' : 'Désactivée'}</span>
+        )}
+
+        {/* Liste des applications */}
+        {apiKeys.length > 0 && (
+          <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+            <h3 className="font-bold text-slate-900 mb-4">Mes applications ({apiKeys.length})</h3>
+            <div className="space-y-3">
+              {apiKeys.map(key => (
+                <div key={key.id} className={`border rounded-2xl p-4 transition cursor-pointer ${activeKey?.id === key.id ? 'border-indigo-400 bg-indigo-50/50' : 'border-slate-200 hover:border-indigo-200'}`} onClick={() => setActiveKey(key)}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h4 className="font-bold text-slate-900">{key.name}</h4>
+                      <p className="text-xs text-slate-500 font-mono">{key.api_key.substring(0, 15)}...{key.api_key.substring(key.api_key.length - 4)}</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${key.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        {key.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                      <button onClick={(e) => { e.stopPropagation(); revokeKey(key.id) }} className="px-2 py-1 bg-red-50 text-red-600 border border-red-200 font-bold text-[10px] rounded-md hover:bg-red-100 transition">
+                        Révoquer
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  <input type={showKey ? "text" : "password"} readOnly value={apiKey.api_key} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-600" />
-                  <button onClick={copyKey} className="px-4 bg-sky-100 text-sky-600 rounded-xl font-bold active:bg-sky-200 transition">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
-                  </button>
-                </div>
-                <button onClick={() => setShowKey(!showKey)} className="text-xs text-indigo-500 mt-2 font-bold">{showKey ? 'Cacher' : 'Afficher'} la clé</button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Détails de la clé active */}
+        {activeKey && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-bold text-slate-900">Clé active : {activeKey.name}</h3>
+                <span className="text-[10px] font-bold bg-indigo-100 text-indigo-700 px-2 py-1 rounded">{activeKey.credits} crédits</span>
               </div>
-              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
-                <h3 className="font-bold text-slate-900 mb-3">Scopes activés</h3>
-                <div className="flex flex-wrap gap-2">
-                  {apiKey.scopes?.map((s: string) => {
-                    const scopeInfo = AVAILABLE_SCOPES.find(sc => sc.id === s)
-                    if (!scopeInfo) return null
-                    return <span key={s} className={`text-[10px] font-bold px-2 py-1 rounded-md ${scopeInfo.color}`}>{scopeInfo.label}</span>
-                  })}
-                </div>
+              <div className="flex gap-2">
+                <input type={showKey ? "text" : "password"} readOnly value={activeKey.api_key} className="flex-1 p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-600" />
+                <button onClick={() => copyKey(activeKey.api_key)} className="px-4 bg-sky-100 text-sky-600 rounded-xl font-bold active:bg-sky-200 transition">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                </button>
+              </div>
+              <button onClick={() => setShowKey(!showKey)} className="text-xs text-indigo-500 mt-2 font-bold">{showKey ? 'Cacher' : 'Afficher'} la clé</button>
+            </div>
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+              <h3 className="font-bold text-slate-900 mb-3">Scopes activés</h3>
+              <div className="flex flex-wrap gap-2">
+                {activeKey.scopes?.map((s: string) => {
+                  const scopeInfo = AVAILABLE_SCOPES.find(sc => sc.id === s)
+                  if (!scopeInfo) return null
+                  return <span key={s} className={`text-[10px] font-bold px-2 py-1 rounded-md ${scopeInfo.color}`}>{scopeInfo.label}</span>
+                })}
               </div>
             </div>
-          </>
+          </div>
         )}
+
       </div>
     </main>
   )
