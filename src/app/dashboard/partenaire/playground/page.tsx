@@ -21,8 +21,11 @@ export default function PlaygroundPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.push('/login')
+      
       const { data: keys } = await supabase.from('api_keys').select('*').eq('partner_id', user.id).limit(1)
-      if (keys && keys.length > 0) setApiKey(keys[0])
+      if (keys && keys.length > 0) {
+        setApiKey(keys[0])
+      }
       setLoading(false)
     }
     load()
@@ -37,23 +40,49 @@ export default function PlaygroundPage() {
 
   const testApi = async () => {
     if (!apiKey) return
+    
     setIsTesting(true)
     setResponse(null)
+    
     try {
+      // 🔥 Construction propre de l'URL
+      const baseUrl = window.location.origin
+      const finalUrl = `${baseUrl}/api/v1${endpoint}`
+      
       const options: RequestInit = {
         method,
-        headers: { 'Authorization': `Bearer ${apiKey.api_key}` }
+        headers: { 
+          'Authorization': `Bearer ${apiKey.api_key}`,
+          'Content-Type': 'application/json'
+        }
       }
+      
       if (method === 'POST' || method === 'PATCH') {
         options.body = body
-        options.headers = { ...options.headers, 'Content-Type': 'application/json' }
       }
-      const res = await fetch(`${window.location.origin}/api/v1${endpoint}`, options)
-      const data = await res.json()
+      
+      const res = await fetch(finalUrl, options)
+      
+      // 🔥 Lire la réponse en texte d'abord pour éviter le crash si c'est du HTML
+      const text = await res.text()
+      
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch {
+        // Si ce n'est pas du JSON, c'est probablement une erreur 404 HTML
+        data = { 
+          error: `Erreur ${res.status}`, 
+          details: "L'endpoint n'existe pas encore ou a renvoyé du HTML.",
+          raw: text.substring(0, 200) 
+        }
+      }
+      
       setResponse({ status: res.status, data })
     } catch (err: any) {
       setResponse({ status: 500, data: { error: err.message } })
     }
+    
     setIsTesting(false)
   }
 
@@ -94,12 +123,27 @@ export default function PlaygroundPage() {
               <option>PATCH</option>
               <option>DELETE</option>
             </select>
-            <input type="text" value={endpoint} onChange={e => setEndpoint(e.target.value)} className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-emerald-400 outline-none" />
+            <input 
+              type="text" 
+              value={endpoint} 
+              onChange={e => setEndpoint(e.target.value)} 
+              placeholder="/tasks"
+              className="flex-1 p-3 bg-slate-950 border border-slate-700 rounded-xl text-sm font-mono text-emerald-400 outline-none" 
+            />
           </div>
 
+          {/* 🔥 AFFICHAGE DE LA CLÉ API */}
           <div className="mb-4">
             <label className="block text-xs font-bold text-slate-500 uppercase mb-1 font-mono">Clé API</label>
-            <input type="password" readOnly value={apiKey?.api_key || ''} className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-slate-500" />
+            {apiKey ? (
+              <div className="w-full p-3 bg-slate-950 border border-slate-700 rounded-xl text-xs font-mono text-emerald-400 overflow-hidden text-ellipsis whitespace-nowrap">
+                {apiKey.api_key}
+              </div>
+            ) : (
+              <div className="w-full p-3 bg-red-900/30 border border-red-700 rounded-xl text-xs font-mono text-red-400">
+                ⚠️ Aucune clé API trouvée. Créez-en une sur la page principale.
+              </div>
+            )}
           </div>
 
           {(method === 'POST' || method === 'PATCH') && (
@@ -109,7 +153,11 @@ export default function PlaygroundPage() {
             </div>
           )}
 
-          <button onClick={testApi} disabled={isTesting || !apiKey} className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded-xl disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition font-mono flex justify-center items-center gap-2">
+          <button 
+            onClick={testApi} 
+            disabled={isTesting || !apiKey} 
+            className="w-full py-4 bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-black rounded-xl disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.3)] transition font-mono flex justify-center items-center gap-2"
+          >
             {isTesting ? 'EXÉCUTION...' : 'EXÉCUTER LA REQUÊTE'}
           </button>
         </div>
