@@ -12,7 +12,8 @@ export default function BonusPage() {
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
   const [conditions, setConditions] = useState<any>(null)
-  const [network, setNetwork] = useState({ l1: 0, l2: 0, l3: 0 })
+  const [totalInvites, setTotalInvites] = useState(0)
+  const [pendingEarnings, setPendingEarnings] = useState(0)
   const [isRequesting, setIsRequesting] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [showWithdrawModal, setShowWithdrawModal] = useState(false)
@@ -25,22 +26,17 @@ export default function BonusPage() {
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', session.user.id).single()
       setProfile(prof)
 
+      // Récupérer le statut des conditions
       const { data: cond } = await supabase.rpc('check_bonus_conditions', { p_user_id: session.user.id })
       setConditions(cond)
 
-      const { data: l1 } = await supabase.from('profiles').select('id').eq('referred_by', session.user.id)
-      const l1Ids = l1?.map(p => p.id) || []
-      let l2Ids: string[] = []
-      if (l1Ids.length > 0) {
-        const { data: l2 } = await supabase.from('profiles').select('id').in('referred_by', l1Ids)
-        l2Ids = l2?.map(p => p.id) || []
-      }
-      let l3Ids: string[] = []
-      if (l2Ids.length > 0) {
-        const { data: l3 } = await supabase.from('profiles').select('id').in('referred_by', l2Ids)
-        l3Ids = l3?.map(p => p.id) || []
-      }
-      setNetwork({ l1: l1Ids.length, l2: l2Ids.length, l3: l3Ids.length })
+      // Compter les filleuls directs (invitations)
+      const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('referred_by', session.user.id)
+      setTotalInvites(count || 0)
+
+      // Calculer les gains en attente
+      const { data: pending } = await supabase.from('bonus_earnings').select('amount').eq('referrer_id', session.user.id).eq('status', 'pending')
+      setPendingEarnings(pending?.reduce((sum, e) => sum + Number(e.amount), 0) || 0)
 
       setLoading(false)
     }
@@ -80,7 +76,9 @@ export default function BonusPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-8 h-8 border-4 border-emerald-200 border-t-emerald-500 rounded-full animate-spin"></div></div>
+
+  const progress = conditions ? Math.min((conditions.available_earnings / conditions.min_withdrawal) * 100, 100) : 0
 
   return (
     <main className="min-h-screen bg-slate-50 pb-24">
@@ -93,39 +91,103 @@ export default function BonusPage() {
 
       <div className="p-4 max-w-md mx-auto space-y-4">
 
-        <div className="bg-gradient-to-br from-emerald-500 to-teal-600 rounded-3xl p-6 text-white shadow-lg relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/20 rounded-full blur-2xl transform translate-x-10 -translate-y-10"></div>
+        {/* HERO : Gains disponibles */}
+        <div className="bg-gradient-to-br from-emerald-500 via-emerald-600 to-teal-700 rounded-[2rem] p-6 text-white shadow-2xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/10 rounded-full blur-3xl transform translate-x-16 -translate-y-16"></div>
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-teal-300/20 rounded-full blur-2xl transform -translate-x-10 translate-y-10"></div>
+          
           <div className="relative z-10">
-            <p className="text-xs font-bold text-emerald-100 uppercase mb-1">Gains disponibles</p>
-            <p className="text-4xl font-black mb-1">{conditions?.available_earnings.toLocaleString('fr-FR') || 0} F</p>
-            <p className="text-xs text-emerald-100">Objectif : {conditions?.min_withdrawal.toLocaleString('fr-FR')} F</p>
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-2 h-2 bg-emerald-300 rounded-full animate-pulse"></div>
+              <p className="text-xs font-bold text-emerald-100 uppercase tracking-wider">Gains disponibles</p>
+            </div>
+            <div className="flex items-baseline gap-2 mb-3">
+              <p className="text-5xl font-black">{conditions?.available_earnings.toLocaleString('fr-FR') || 0}</p>
+              <p className="text-lg font-bold text-emerald-200">FCFA</p>
+            </div>
+            
+            {/* Barre de progression */}
+            <div className="mb-3">
+              <div className="flex justify-between text-[10px] font-bold text-emerald-100 mb-1">
+                <span>Progression</span>
+                <span>{progress.toFixed(0)}%</span>
+              </div>
+              <div className="w-full h-2.5 bg-emerald-900/40 rounded-full overflow-hidden">
+                <div className="h-full bg-gradient-to-r from-yellow-300 to-emerald-200 rounded-full transition-all duration-1000" style={{ width: `${progress}%` }}></div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-emerald-100">Objectif : {conditions?.min_withdrawal.toLocaleString('fr-FR')} F pour débloquer le retrait</p>
           </div>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="text-xs font-bold text-slate-500 uppercase mb-2">Ton lien d'invitation</p>
-          <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3 text-center mb-4">
-            <span className="text-lg font-black tracking-widest text-sky-600">{profile?.referral_code}</span>
+        {/* Statistiques : Invitations + En attente */}
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 bg-sky-100 text-sky-600 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">Invités</p>
+            </div>
+            <p className="text-2xl font-black text-slate-900">{totalInvites}</p>
           </div>
-          <button onClick={copyLink} className="w-full py-3 bg-sky-500 text-white font-bold rounded-xl active:scale-95 transition">
-            {copied ? 'Lien copié !' : 'Copier le lien'}
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 bg-amber-100 text-amber-600 rounded-lg flex items-center justify-center">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              </div>
+              <p className="text-[10px] font-bold text-slate-500 uppercase">En attente</p>
+            </div>
+            <p className="text-2xl font-black text-slate-900">{pendingEarnings.toLocaleString('fr-FR')} F</p>
+          </div>
+        </div>
+
+        {/* Lien d'invitation */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs font-bold text-slate-500 uppercase">Ton lien d'invitation</p>
+            <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">100 F / invité</span>
+          </div>
+          <div className="bg-slate-50 border-2 border-dashed border-slate-300 rounded-xl p-3 text-center mb-3">
+            <span className="text-lg font-black tracking-widest text-emerald-600">{profile?.referral_code}</span>
+          </div>
+          <button onClick={copyLink} className="w-full py-3 bg-slate-900 text-white font-bold rounded-xl active:scale-95 transition flex items-center justify-center gap-2">
+            {copied ? (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" /></svg>
+                Lien copié !
+              </>
+            ) : (
+              <>
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                Copier mon lien
+              </>
+            )}
           </button>
         </div>
 
-        <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
-          <p className="font-bold text-slate-900 mb-3">Mon réseau</p>
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-sky-50 rounded-xl p-3 text-center"><p className="text-2xl font-black text-sky-600">{network.l1}</p><p className="text-[10px] font-bold text-slate-500">Niveau 1</p></div>
-            <div className="bg-indigo-50 rounded-xl p-3 text-center"><p className="text-2xl font-black text-indigo-600">{network.l2}</p><p className="text-[10px] font-bold text-slate-500">Niveau 2</p></div>
-            <div className="bg-purple-50 rounded-xl p-3 text-center"><p className="text-2xl font-black text-purple-600">{network.l3}</p><p className="text-[10px] font-bold text-slate-500">Niveau 3</p></div>
+        {/* Explication */}
+        <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+          <div className="flex gap-3">
+            <div className="w-8 h-8 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shrink-0">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            </div>
+            <div>
+              <p className="text-xs font-bold text-emerald-900 mb-1">Comment ça marche ?</p>
+              <p className="text-[11px] text-emerald-800 leading-relaxed">Partage ton lien. Quand une personne s'inscrit avec, tu gagnes <strong>100 FCFA</strong> automatiquement. Ces gains sont retirables une fois les conditions remplies.</p>
+            </div>
           </div>
         </div>
 
-        <button onClick={handleWithdrawClick} className="w-full py-4 bg-slate-900 text-white font-bold rounded-xl shadow-md active:scale-95 transition">
+        {/* Bouton retrait */}
+        <button onClick={handleWithdrawClick} className="w-full py-4 bg-gradient-to-r from-slate-900 to-slate-800 text-white font-bold rounded-xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
           Demander un retrait
         </button>
       </div>
 
+      {/* Modale de retrait */}
       {showWithdrawModal && conditions && (
         <div className="fixed inset-0 z-[200] bg-slate-900/60 backdrop-blur-sm flex items-end justify-center p-4" onClick={() => setShowWithdrawModal(false)}>
           <div className="bg-white rounded-t-3xl w-full max-w-md p-6 pb-8 max-h-[85vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
@@ -137,41 +199,20 @@ export default function BonusPage() {
 
             <div className="space-y-2 mb-5">
               <div className={`flex items-center gap-3 p-3 rounded-xl border ${conditions.tasks_done >= conditions.required_tasks ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.tasks_done >= conditions.required_tasks ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
-                  {conditions.tasks_done >= conditions.required_tasks ? '✓' : '!'}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Accomplir {conditions.required_tasks} tâches</p>
-                  <p className="text-[10px] text-slate-500">{conditions.tasks_done} / {conditions.required_tasks}</p>
-                </div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.tasks_done >= conditions.required_tasks ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>{conditions.tasks_done >= conditions.required_tasks ? '✓' : '!'}</div>
+                <div className="flex-1"><p className="text-xs font-bold text-slate-900">Accomplir {conditions.required_tasks} tâches</p><p className="text-[10px] text-slate-500">{conditions.tasks_done} / {conditions.required_tasks}</p></div>
               </div>
-
               <div className={`flex items-center gap-3 p-3 rounded-xl border ${conditions.active_refs >= conditions.required_refs ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.active_refs >= conditions.required_refs ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
-                  {conditions.active_refs >= conditions.required_refs ? '✓' : '!'}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Avoir {conditions.required_refs} filleuls actifs</p>
-                  <p className="text-[10px] text-slate-500">{conditions.active_refs} / {conditions.required_refs}</p>
-                </div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.active_refs >= conditions.required_refs ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>{conditions.active_refs >= conditions.required_refs ? '✓' : '!'}</div>
+                <div className="flex-1"><p className="text-xs font-bold text-slate-900">Avoir {conditions.required_refs} filleuls actifs</p><p className="text-[10px] text-slate-500">{conditions.active_refs} / {conditions.required_refs}</p></div>
               </div>
-
               <div className={`flex items-center gap-3 p-3 rounded-xl border ${conditions.phone_set ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.phone_set ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
-                  {conditions.phone_set ? '✓' : '!'}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Numéro de téléphone ajouté</p>
-                </div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.phone_set ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>{conditions.phone_set ? '✓' : '!'}</div>
+                <div className="flex-1"><p className="text-xs font-bold text-slate-900">Numéro de téléphone ajouté</p></div>
               </div>
-
               <div className={`flex items-center gap-3 p-3 rounded-xl border ${conditions.email_verified ? 'bg-emerald-50 border-emerald-200' : 'bg-slate-50 border-slate-200'}`}>
-                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.email_verified ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>
-                  {conditions.email_verified ? '✓' : '!'}
-                </div>
-                <div className="flex-1">
-                  <p className="text-xs font-bold text-slate-900">Email vérifié</p>
-                </div>
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 text-xs font-bold ${conditions.email_verified ? 'bg-emerald-500 text-white' : 'bg-slate-300 text-slate-600'}`}>{conditions.email_verified ? '✓' : '!'}</div>
+                <div className="flex-1"><p className="text-xs font-bold text-slate-900">Email vérifié</p></div>
               </div>
             </div>
 
