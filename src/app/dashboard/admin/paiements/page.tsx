@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 
-export default function AdminPaymentsPage() {
+export default function AdminPaiementsPage() {
   const supabase = createClient()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
