@@ -204,12 +204,19 @@ export default function AdminDashboardPage() {
             <p className="text-[10px] text-slate-500">Parrainage gratuit</p>
           </Link>
 
-          <Link href="/dashboard/admin/paiements" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition active:scale-95">
+          <Link
+            href="/dashboard/admin/paiements"
+            className="relative bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition active:scale-95"
+          >
             <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 mb-3">
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
             </div>
             <h3 className="font-bold text-slate-900 text-sm">Paiements</h3>
-            <p className="text-[10px] text-slate-500">LeekPay / SoleasPay</p>
+            <p className="text-[10px] text-slate-500 mb-3">LeekPay / SoleasPay</p>
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-sky-600 bg-sky-50 px-2 py-1 rounded-full">
+              Détails
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" /></svg>
+            </span>
           </Link>
 
           <Link href="/dashboard/admin/parametres" className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-5 shadow-sm hover:shadow-md transition active:scale-95">
