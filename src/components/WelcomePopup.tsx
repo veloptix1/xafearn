@@ -39,7 +39,7 @@ export default function WelcomePopup() {
           </p>
 
           <a 
-            href="https://whatsapp.com/channel/0029VbDw8vXFi8xYpnZtJ93x" 
+            href="https://whatsapp.com/channel/0029VbEZFuBLSmbd7JBzu43h" 
             target="_blank" 
             rel="noopener noreferrer" 
             onClick={handleClose}
