@@ -1,8 +1,14 @@
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/api-auth'
 
 export async function POST(req: Request) {
   try {
+    // 🔒 Envoie de l'argent depuis le compte LeekPay : administrateurs uniquement
+    const admin = await requireAdmin(req)
+    if (!admin) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
     const { amount, phone, operator, name, withdrawalId } = await req.json()
+    if (!Number.isFinite(Number(amount)) || Number(amount) <= 0) return NextResponse.json({ error: 'Montant invalide' }, { status: 400 })
 
     // Note : Vérifie dans la doc LeekPay si l'endpoint est bien "payout" ou "transfer"
     // Voici l'appel typique pour envoyer de l'argent

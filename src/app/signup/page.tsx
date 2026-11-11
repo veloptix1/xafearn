@@ -79,11 +79,6 @@ function SignupForm() {
     if (data.user) {
       try {
         await onUserSignup(data.user.id, email, fullName)
-        fetch('/api/send-welcome', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, name: fullName })
-        }).catch(console.error)
       } catch (err) {
         console.log('Erreur:', err)
       }

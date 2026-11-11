@@ -10,7 +10,10 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://xafearn-weld.vercel.app';
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://getagriculture.store';
+
+// Échappe le texte venant des utilisateurs avant de l'insérer dans le HTML d'un email
+const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 // Template de base pour tous les emails (Design pro)
 const wrapTemplate = (title: string, content: string, color: string = '#0ea5e9') => `
@@ -37,7 +40,7 @@ const wrapTemplate = (title: string, content: string, color: string = '#0ea5e9')
 // 1. EMAIL DE BIENVENUE (Long et structuré)
 export async function sendWelcomeEmail(email: string, name: string) {
   const content = `
-    <h2 style="color: #0f172a; margin-top: 0;">Bonjour ${name},</h2>
+    <h2 style="color: #0f172a; margin-top: 0;">Bonjour ${esc(name)},</h2>
     <p>Nous sommes ravis de vous accueillir sur <strong>XAFEARN</strong>, la plateforme qui transforme vos statuts WhatsApp en une véritable source de revenus.</p>
     
     <h3 style="color: #0ea5e9; margin-top: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">🚀 Comment fonctionne XAFEARN ?</h3>
@@ -88,7 +91,7 @@ export async function sendWelcomeEmail(email: string, name: string) {
 // 2. EMAIL DE VALIDATION DE GAINS (Long et détaillé)
 export async function sendValidationEmail(email: string, name: string, views: number, gain: number) {
   const content = `
-    <h2 style="color: #0f172a; margin-top: 0;">Félicitations ${name},</h2>
+    <h2 style="color: #0f172a; margin-top: 0;">Félicitations ${esc(name)},</h2>
     <p>Nous avons le plaisir de vous informer que votre preuve de diffusion a été <strong>vérifiée et validée</strong> par notre équipe.</p>
     
     <h3 style="color: #10b981; margin-top: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">📊 Détails de la validation</h3>
@@ -134,7 +137,7 @@ export async function sendValidationEmail(email: string, name: string, views: nu
 // 3. EMAIL DE RAPPEL (Long et structuré)
 export async function sendReminderEmail(email: string, name: string) {
   const content = `
-    <h2 style="color: #0f172a; margin-top: 0;">Bonjour ${name},</h2>
+    <h2 style="color: #0f172a; margin-top: 0;">Bonjour ${esc(name)},</h2>
     <p>Nous avons remarqué que vous avez publié une annonce il y a environ 24 heures, mais que vous n'avez pas encore soumis votre preuve de diffusion.</p>
     
     <h3 style="color: #f59e0b; margin-top: 24px; border-bottom: 1px solid #e2e8f0; padding-bottom: 8px;">⏰ Pourquoi est-ce important ?</h3>
@@ -176,7 +179,7 @@ export async function sendBulkEmail(emails: string[], subject: string, message: 
   
   const content = `
     <h2 style="color: #0f172a; margin-top: 0;">Information XAFEARN</h2>
-    <p style="white-space: pre-wrap; line-height: 1.7;">${message}</p>
+    <p style="white-space: pre-wrap; line-height: 1.7;">${esc(message)}</p>
     
     <div style="text-align: center; margin: 30px 0;">
       <a href="${APP_URL}/dashboard" style="background-color: #0ea5e9; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; font-size: 16px;">Accéder à mon compte</a>

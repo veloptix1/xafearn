@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server'
 import { sendBulkEmail } from '@/lib/email/send'
+import { requireAdmin } from '@/lib/api-auth'
 import nodemailer from 'nodemailer'
 
 export async function POST(req: Request) {
   try {
+    // 🔒 Envoi d'emails au nom de la plateforme : administrateurs uniquement
+    const admin = await requireAdmin(req)
+    if (!admin) return NextResponse.json({ error: 'Accès refusé' }, { status: 403 })
+
     const { to, subject, message, users } = await req.json()
 
     if (!subject || !message) {
