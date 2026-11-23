@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import Toast from '@/components/Toast'
+import { DEFAULT_COIN_RATES, loadCoinRates } from '@/lib/coins'
 
 export default function ConvertCoinsPage() {
   const supabase = createClient()
@@ -16,9 +17,9 @@ export default function ConvertCoinsPage() {
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | 'warning' } | null>(null)
   const showToast = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => setToast({ message, type })
 
-  // Taux de conversion caché (1 jeton = 1 FCFA brut)
-  // La plateforme garde 40%, donc l'utilisateur reçoit 60%
-  const RATE = 0.60 
+  // Taux de conversion : lu dans la base (réglage coin_fcfa_rate). Affichage et calcul serveur identiques.
+  const [rates, setRates] = useState(DEFAULT_COIN_RATES)
+  const RATE = rates.fcfaPerCoin
 
   useEffect(() => {
     async function load() {
@@ -27,6 +28,7 @@ export default function ConvertCoinsPage() {
       const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       setProfile(data)
       setAmountToConvert(data?.coins_balance?.toString() || '0')
+      setRates(await loadCoinRates(supabase))
       setLoading(false)
     }
     load()
@@ -42,35 +44,15 @@ export default function ConvertCoinsPage() {
     
     setIsProcessing(true)
     try {
-      // 1. Ajouter l'argent au solde FCFA
-      await supabase.from('profiles').update({ 
-        balance: (profile.balance || 0) + fcfcToReceive 
-      }).eq('id', profile.id)
-
-      // 2. Retirer les jetons convertis
-      await supabase.from('profiles').update({ 
-        coins_balance: maxCoins - coins 
-      }).eq('id', profile.id)
-
-      // 3. Enregistrer la conversion
-      await supabase.from('coin_conversions').insert({
-        user_id: profile.id,
-        coins_converted: coins,
-        fcfc_received: fcfcToReceive,
-        commission: coins - fcfcToReceive
-      })
-
-      // 4. Notification
-      await supabase.from('notifications').insert({
-        user_id: profile.id,
-        title: 'Jetons convertis ! 💰',
-        message: `Tu as converti ${coins} jetons et reçu ${fcfcToReceive.toFixed(0)} FCFA sur ton solde.`,
-        link: '/dashboard'
-      })
-
-      showToast(`Conversion réussie ! +${fcfcToReceive.toFixed(0)} FCFA`, 'success')
-      setTimeout(() => router.push('/dashboard'), 2000)
-    } catch (err) {
+      // Conversion atomique côté serveur : débit des jetons, crédit du solde, historique et notification
+      const { data, error } = await supabase.rpc('convert_coins_to_balance', { p_coins: coins })
+      if (error || !data?.success) {
+        showToast(data?.error || 'Erreur lors de la conversion.', 'error')
+      } else {
+        showToast(`Conversion réussie ! +${Math.round(Number(data.fcfa))} FCFA`, 'success')
+        setTimeout(() => router.push('/dashboard'), 2000)
+      }
+    } catch {
       showToast('Erreur lors de la conversion.', 'error')
     }
     setIsProcessing(false)

@@ -4,9 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-
-const COINS_PER_1000_FCFA = 800
-const MIN_FCFA = 100
+import { DEFAULT_COIN_RATES, loadCoinRates } from '@/lib/coins'
 
 export default function BuyCoinsPage() {
   const supabase = createClient()
@@ -18,6 +16,9 @@ export default function BuyCoinsPage() {
   const [customAmount, setCustomAmount] = useState('')
   const [isProcessing, setIsProcessing] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [rates, setRates] = useState(DEFAULT_COIN_RATES)
+  const COINS_PER_1000_FCFA = rates.coinsPer1000
+  const MIN_FCFA = rates.minBuyFcfa
 
   // Réglages paiement
   const [settings, setSettings] = useState({
@@ -46,6 +47,7 @@ export default function BuyCoinsPage() {
         soleasLink: obj.soleaspay_payment_link || ''
       })
 
+      setRates(await loadCoinRates(supabase))
       setLoading(false)
     }
     load()
@@ -66,12 +68,16 @@ export default function BuyCoinsPage() {
     
     setIsProcessing(true)
     try {
-      await supabase.from('profiles').update({ balance: profile.balance - finalAmount }).eq('id', profile.id)
-      await supabase.from('profiles').update({ coins_balance: (profile.coins_balance || 0) + coinsToReceive }).eq('id', profile.id)
-      showMsg(`+${coinsToReceive} jetons ajoutés !`)
-      setTimeout(() => router.push('/dashboard'), 1500)
-    } catch (err) {
-      showMsg('Erreur lors de l\'achat.')
+      // Achat calculé et vérifié côté serveur (le navigateur ne peut plus choisir le nombre de jetons)
+      const { data, error } = await supabase.rpc('buy_coins_with_balance', { p_fcfa: finalAmount })
+      if (error || !data?.success) {
+        showMsg(data?.error || "Erreur lors de l'achat.")
+      } else {
+        showMsg(`+${data.coins} jetons ajoutés !`)
+        setTimeout(() => router.push('/dashboard'), 1500)
+      }
+    } catch {
+      showMsg("Erreur lors de l'achat.")
     }
     setIsProcessing(false)
   }
