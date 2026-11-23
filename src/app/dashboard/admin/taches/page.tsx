@@ -9,17 +9,17 @@ import Toast from '@/components/Toast'
 export default function AdminTasksPage() {
   const supabase = createClient()
   const router = useRouter()
-  
+
   const [tasks, setTasks] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isAdmin, setIsAdmin] = useState(false)
   const [profile, setProfile] = useState<any>(null)
   const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' } | null>(null)
-  
+
   // État pour le formulaire (Drawer)
   const [isFormOpen, setIsFormOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<any>(null)
-  
+
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [reward, setReward] = useState('50')
@@ -28,7 +28,7 @@ export default function AdminTasksPage() {
   const [image, setImage] = useState<File | null>(null)
   const [imagePreview, setImagePreview] = useState<string | null>(null)
   const [isPremium, setIsPremium] = useState(false)
-  
+
   // État pour voir les preuves
   const [viewingSubmissions, setViewingSubmissions] = useState<any>(null)
   const [submissions, setSubmissions] = useState<any[]>([])
@@ -43,7 +43,7 @@ export default function AdminTasksPage() {
 
       const { data: prof } = await supabase.from('profiles').select('*').eq('id', user.id).single()
       if (!prof || (prof.role !== 'admin' && !prof.is_admin)) return router.push('/dashboard')
-      
+
       setIsAdmin(true)
       setProfile(prof)
       await fetchTasks()
@@ -128,24 +128,45 @@ export default function AdminTasksPage() {
     } catch (err: any) { showToast(err.message, 'error') }
   }
 
+  // ✅ CORRIGÉ : gestion d'erreur + reset + normalisation
   const loadSubmissions = async (task: any) => {
     setViewingSubmissions(task)
     setLoadingSubmissions(true)
+    setSubmissions([])
+
     const { data, error } = await supabase.rpc('get_task_submissions', { p_task_id: task.id })
-    if (!error && data) setSubmissions(data)
+
+    // 🔍 Debug — à retirer plus tard si tu veux
+    console.log('🔍 get_task_submissions =>', { data, error })
+
+    if (error) {
+      console.error('❌ RPC error:', error)
+      showToast(`Erreur : ${error.message}`, 'error')
+      setSubmissions([])
+    } else {
+      const list = Array.isArray(data) ? data : []
+      setSubmissions(list)
+      if (list.length === 0) showToast('Aucune preuve pour cette tâche.', 'error')
+    }
+
     setLoadingSubmissions(false)
   }
 
+  // ✅ CORRIGÉ : normalisation du retour + gestion erreur
   const validateSubmission = async (subId: string, status: 'approved' | 'rejected') => {
     if (!confirm(`Voulez-vous ${status === 'approved' ? 'approuver' : 'rejeter'} cette preuve ?`)) return
     try {
       const { error } = await supabase.rpc('admin_validate_submission', { p_submission_id: subId, p_admin_id: profile.id, p_status: status })
       if (error) throw error
       showToast(`Preuve ${status === 'approved' ? 'approuvée' : 'rejetée'} !`, 'success')
-      // Recharger
-      const { data } = await supabase.rpc('get_task_submissions', { p_task_id: viewingSubmissions.id })
-      if (data) setSubmissions(data)
-    } catch (err: any) { showToast(err.message, 'error') }
+
+      // Recharger la liste
+      const { data, error: reloadErr } = await supabase.rpc('get_task_submissions', { p_task_id: viewingSubmissions.id })
+      if (reloadErr) throw reloadErr
+      setSubmissions(Array.isArray(data) ? data : [])
+    } catch (err: any) {
+      showToast(err.message, 'error')
+    }
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-slate-50"><div className="w-10 h-10 border-4 border-sky-200 border-t-sky-500 rounded-full animate-spin"></div></div>
@@ -194,7 +215,7 @@ export default function AdminTasksPage() {
                   </div>
                   <p className="text-xs text-slate-500 line-clamp-2 mb-3">{t.description}</p>
                   <p className="text-[10px] text-slate-400 uppercase font-bold mb-4">{t.type || 'simple'}</p>
-                  
+
                   <div className="flex gap-2">
                     <button onClick={() => loadSubmissions(t)} className="flex-1 py-2 bg-slate-100 text-slate-700 font-bold text-xs rounded-lg hover:bg-slate-200 transition">Voir preuves</button>
                     <button onClick={() => openEditForm(t)} className="px-3 py-2 bg-sky-50 text-sky-600 font-bold text-xs rounded-lg hover:bg-sky-100 transition">Modifier</button>
@@ -245,7 +266,7 @@ export default function AdminTasksPage() {
                 <label className="block text-xs font-bold text-slate-600 uppercase mb-1">URL de l'action (optionnel)</label>
                 <input type="url" value={actionUrl} onChange={e => setActionUrl(e.target.value)} placeholder="https://..." className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:border-sky-500" />
               </div>
-              
+
               <div className="flex items-center justify-between bg-amber-50 border border-amber-200 p-3 rounded-xl">
                 <div>
                   <p className="text-xs font-bold text-amber-800">Tâche Premium 👑</p>
@@ -298,15 +319,24 @@ export default function AdminTasksPage() {
                   <div key={s.id} className="bg-white border border-slate-200 rounded-xl p-3 shadow-sm">
                     <div className="flex justify-between items-start mb-2">
                       <div>
-                        <p className="font-bold text-slate-900 text-sm">{s.user_name}</p>
+                        <p className="font-bold text-slate-900 text-sm">{s.user_name || 'Utilisateur'}</p>
                         <p className="text-[10px] text-slate-500">{new Date(s.created_at).toLocaleString('fr-FR')}</p>
                       </div>
                       <span className={`text-[10px] font-bold px-2 py-1 rounded-md ${s.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : s.status === 'rejected' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
                         {s.status === 'approved' ? 'Approuvé' : s.status === 'rejected' ? 'Rejeté' : 'En attente'}
                       </span>
                     </div>
-                    {s.proof_url && (
-                      <img src={s.proof_url} alt="Preuve" className="w-full h-32 object-cover rounded-lg mb-3 border border-slate-100" />
+                    {s.proof_url ? (
+                      <a href={s.proof_url} target="_blank" rel="noopener noreferrer">
+                        <img
+                          src={s.proof_url}
+                          alt="Preuve"
+                          className="w-full h-32 object-cover rounded-lg mb-3 border border-slate-100"
+                          onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+                        />
+                      </a>
+                    ) : (
+                      <p className="text-[11px] text-red-500 mb-3">⚠️ Aucune preuve attachée</p>
                     )}
                     {s.status === 'pending' && (
                       <div className="flex gap-2">
