@@ -34,6 +34,12 @@ export default function AdminTasksPage() {
   const [submissions, setSubmissions] = useState<any[]>([])
   const [loadingSubmissions, setLoadingSubmissions] = useState(false)
 
+  // Preuves en attente, toutes tâches confondues (visibles dès l'ouverture de la page)
+  const [pending, setPending] = useState<any[]>([])
+  const [pendingLoading, setPendingLoading] = useState(true)
+  const [pendingError, setPendingError] = useState<string | null>(null)
+  const [lightbox, setLightbox] = useState<string | null>(null)
+
   const showToast = (msg: string, type: 'success' | 'error' = 'success') => setToast({ message: msg, type })
 
   useEffect(() => {
@@ -47,6 +53,7 @@ export default function AdminTasksPage() {
       setIsAdmin(true)
       setProfile(prof)
       await fetchTasks()
+      void fetchPending()
       setLoading(false)
     }
     load()
@@ -128,8 +135,45 @@ export default function AdminTasksPage() {
     } catch (err: any) { showToast(err.message, 'error') }
   }
 
-  // ✅ CORRIGÉ : gestion d'erreur + reset + normalisation
-  const loadSubmissions = async (task: any) => {
+  // Ajoute le nom de l'utilisateur et le titre / la récompense de la tâche (lecture simple, sans jointure)
+  const enrich = async (rows: any[]) => {
+    const userIds = [...new Set(rows.map((r) => r.user_id).filter(Boolean))]
+    const taskIds = [...new Set(rows.map((r) => r.task_id).filter(Boolean))]
+    const [users, tasksData] = await Promise.all([
+      userIds.length ? supabase.from('profiles').select('id, full_name').in('id', userIds) : Promise.resolve({ data: [] as any[] }),
+      taskIds.length ? supabase.from('tasks').select('id, title, reward').in('id', taskIds) : Promise.resolve({ data: [] as any[] }),
+    ])
+    const uMap = Object.fromEntries((users.data || []).map((u: any) => [u.id, u.full_name]))
+    const tMap = Object.fromEntries((tasksData.data || []).map((t: any) => [t.id, t]))
+    return rows.map((r) => ({
+      ...r,
+      user_name: r.user_name || uMap[r.user_id] || 'Utilisateur',
+      task_title: r.task_title || tMap[r.task_id]?.title || 'Tâche',
+      reward: r.reward ?? tMap[r.task_id]?.reward,
+    }))
+  }
+
+  // Toutes les preuves à valider, en un seul endroit
+  const fetchPending = async () => {
+    setPendingLoading(true)
+    setPendingError(null)
+    const { data, error } = await supabase
+      .from('task_submissions')
+      .select('*')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .limit(200)
+    if (error) {
+      setPendingError(error.message)
+      setPending([])
+    } else {
+      setPending(await enrich(data || []))
+    }
+    setPendingLoading(false)
+  }
+
+  // ✅ Ta version (gestion d'erreur + normalisation) + lecture directe de secours si la fonction ne renvoie rien
+  const loadSubmissions = async (task: any, silent = false) => {
     setViewingSubmissions(task)
     setLoadingSubmissions(true)
     setSubmissions([])
@@ -139,20 +183,30 @@ export default function AdminTasksPage() {
     // 🔍 Debug — à retirer plus tard si tu veux
     console.log('🔍 get_task_submissions =>', { data, error })
 
-    if (error) {
-      console.error('❌ RPC error:', error)
-      showToast(`Erreur : ${error.message}`, 'error')
-      setSubmissions([])
-    } else {
-      const list = Array.isArray(data) ? data : []
-      setSubmissions(list)
-      if (list.length === 0) showToast('Aucune preuve pour cette tâche.', 'error')
+    let list: any[] = Array.isArray(data) ? data : []
+
+    if (error || list.length === 0) {
+      if (error) {
+        console.error('❌ RPC error:', error)
+        if (!silent) showToast(`Fonction en erreur : ${error.message} (lecture directe…)`, 'error')
+      }
+      const { data: rows, error: e2 } = await supabase
+        .from('task_submissions')
+        .select('*')
+        .eq('task_id', task.id)
+        .order('created_at', { ascending: false })
+      if (e2) {
+        showToast(`Impossible de lire les preuves : ${e2.message}`, 'error')
+      } else if (rows && rows.length > 0) {
+        list = await enrich(rows)
+      }
     }
 
+    setSubmissions(list)
+    if (list.length === 0 && !error && !silent) showToast('Aucune preuve pour cette tâche.', 'error')
     setLoadingSubmissions(false)
   }
 
-  // ✅ CORRIGÉ : normalisation du retour + gestion erreur
   const validateSubmission = async (subId: string, status: 'approved' | 'rejected') => {
     if (!confirm(`Voulez-vous ${status === 'approved' ? 'approuver' : 'rejeter'} cette preuve ?`)) return
     try {
@@ -160,10 +214,8 @@ export default function AdminTasksPage() {
       if (error) throw error
       showToast(`Preuve ${status === 'approved' ? 'approuvée' : 'rejetée'} !`, 'success')
 
-      // Recharger la liste
-      const { data, error: reloadErr } = await supabase.rpc('get_task_submissions', { p_task_id: viewingSubmissions.id })
-      if (reloadErr) throw reloadErr
-      setSubmissions(Array.isArray(data) ? data : [])
+      await fetchPending()
+      if (viewingSubmissions) await loadSubmissions(viewingSubmissions, true)
     } catch (err: any) {
       showToast(err.message, 'error')
     }
@@ -183,7 +235,7 @@ export default function AdminTasksPage() {
           </Link>
           <div>
             <h1 className="text-lg font-bold text-slate-900">Gestion des Tâches</h1>
-            <p className="text-xs text-slate-500">{tasks.length} tâches au total</p>
+            <p className="text-xs text-slate-500">{tasks.length} tâches · <span className={pending.length > 0 ? 'text-amber-600 font-bold' : ''}>{pending.length} preuve(s) à valider</span></p>
           </div>
         </div>
         <button onClick={openCreateForm} className="px-4 py-2 bg-sky-500 text-white text-xs font-bold rounded-xl shadow-md active:scale-95 transition">
@@ -192,6 +244,51 @@ export default function AdminTasksPage() {
       </header>
 
       <div className="p-4 md:p-6 max-w-4xl mx-auto">
+        {/* PREUVES À VALIDER */}
+        <section className="mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-black text-slate-900">Preuves à valider {pending.length > 0 && <span className="ml-1 text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{pending.length}</span>}</h2>
+            <button onClick={() => void fetchPending()} className="text-xs font-bold text-sky-600 bg-sky-50 px-3 py-1.5 rounded-lg">Actualiser</button>
+          </div>
+          {pendingLoading ? (
+            <p className="text-center text-sm text-slate-500 py-6">Chargement…</p>
+          ) : pendingError ? (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-xs font-semibold rounded-xl p-4">Lecture impossible : {pendingError}</div>
+          ) : pending.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 text-center text-sm text-slate-500">Aucune preuve en attente 🎉</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {pending.map((s) => {
+                const proof = s.proof_url || s.proof_screenshot_url
+                return (
+                  <div key={s.id} className="bg-white border border-amber-200 rounded-2xl p-3 shadow-sm">
+                    <div className="flex justify-between items-start gap-2 mb-2">
+                      <div className="min-w-0">
+                        <p className="font-bold text-slate-900 text-sm truncate">{s.user_name}</p>
+                        <p className="text-xs text-slate-500 truncate">{s.task_title}{s.reward ? ` · ${s.reward} F` : ''}</p>
+                        <p className="text-[10px] text-slate-400">{new Date(s.created_at).toLocaleString('fr-FR')}</p>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-amber-100 text-amber-700 shrink-0">En attente</span>
+                    </div>
+                    {proof ? (
+                      <button type="button" onClick={() => setLightbox(proof)} className="block w-full mb-3">
+                        <img src={proof} alt="Preuve" className="w-full h-40 object-cover rounded-lg border border-slate-100" />
+                      </button>
+                    ) : (
+                      <p className="text-xs text-slate-400 mb-3">Aucune image jointe.</p>
+                    )}
+                    <div className="flex gap-2">
+                      <button onClick={() => validateSubmission(s.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white font-bold text-xs rounded-lg active:scale-95 transition">Approuver</button>
+                      <button onClick={() => validateSubmission(s.id, 'rejected')} className="flex-1 py-3 bg-red-500 text-white font-bold text-xs rounded-lg active:scale-95 transition">Rejeter</button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </section>
+
+        <h2 className="font-black text-slate-900 mb-3">Toutes les tâches</h2>
         {tasks.length === 0 ? (
           <div className="bg-white border border-slate-200 p-10 rounded-2xl text-center text-slate-500">
             <p className="text-sm">Aucune tâche créée pour le moment.</p>
@@ -326,10 +423,10 @@ export default function AdminTasksPage() {
                         {s.status === 'approved' ? 'Approuvé' : s.status === 'rejected' ? 'Rejeté' : 'En attente'}
                       </span>
                     </div>
-                    {s.proof_url ? (
-                      <a href={s.proof_url} target="_blank" rel="noopener noreferrer">
+                    {(s.proof_url || s.proof_screenshot_url) ? (
+                      <a href={s.proof_url || s.proof_screenshot_url} target="_blank" rel="noopener noreferrer">
                         <img
-                          src={s.proof_url}
+                          src={s.proof_url || s.proof_screenshot_url}
                           alt="Preuve"
                           className="w-full h-32 object-cover rounded-lg mb-3 border border-slate-100"
                           onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
@@ -349,6 +446,11 @@ export default function AdminTasksPage() {
               )}
             </div>
           </div>
+        </div>
+      )}
+      {lightbox && (
+        <div className="fixed inset-0 z-[300] bg-black/90 flex items-center justify-center p-3" onClick={() => setLightbox(null)}>
+          <img src={lightbox} alt="Preuve" className="max-w-full max-h-full object-contain rounded-lg" />
         </div>
       )}
     </main>
