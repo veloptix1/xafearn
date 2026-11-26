@@ -90,6 +90,17 @@ export default function AdminDashboardPage() {
         {/* Menu d'administration */}
         <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-4 px-1">Menu d'administration</h2>
         
+        <Link href="/dashboard/admin/controle" className="block mb-4 bg-gradient-to-br from-slate-900 via-slate-800 to-sky-900 rounded-3xl p-5 text-white shadow-lg active:scale-[0.99] transition">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center text-2xl">🛰️</div>
+            <div className="flex-1">
+              <p className="font-black text-lg">Tour de contrôle</p>
+              <p className="text-xs text-slate-300">Activité en direct, comptes suspects, restrictions, suspensions et santé du site.</p>
+            </div>
+            <span className="text-2xl text-slate-400">›</span>
+          </div>
+        </Link>
+
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <Link href="/dashboard/admin/utilisateurs" className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm hover:shadow-md transition active:scale-95">
             <div className="w-10 h-10 bg-sky-50 rounded-xl flex items-center justify-center text-sky-500 mb-3">
