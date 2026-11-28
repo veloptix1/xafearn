@@ -552,8 +552,8 @@ begin
 end;
 $$;
 
--- Comptes suspects (score de risque)
-create or replace function public.control_suspects(p_limit integer default 50)
+-- Comptes qui partagent une même adresse IP de connexion (≥ 4 comptes). Sans effet si l'information n'est pas disponible.
+create or replace function public.control_shared_ip_map()
 returns jsonb
 language plpgsql
 stable
@@ -561,7 +561,27 @@ security definer
 set search_path = public
 as $$
 begin
-  perform public.control_assert_admin();
+  return coalesce((
+    select jsonb_agg(jsonb_build_object('id', t.user_id, 'n', t.n))
+    from (
+      select s.user_id, count(*) over (partition by s.ip) as n
+      from (select distinct user_id, ip::text as ip from auth.sessions where ip is not null) s
+    ) t
+    where t.n >= 4), '[]'::jsonb);
+exception when others then
+  return '[]'::jsonb;
+end;
+$$;
+
+-- Comptes suspects (score de risque)
+create or replace function public.control_suspects_core(p_limit integer default 50)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
   return coalesce((
     with prof as (
       select p.id, p.full_name, p.phone, p.referred_by, coalesce(p.balance, 0) as balance,
@@ -612,12 +632,16 @@ begin
       having count(*) >= 8
          and count(*) filter (where not exists (select 1 from public.task_submissions ts where ts.user_id = r.id)) >= 0.8 * count(*)
     ),
+    shared_ip as (
+      select (e ->> 'id')::uuid as id, (e ->> 'n')::int as n from jsonb_array_elements(public.control_shared_ip_map()) e
+    ),
     scored as (
       select p.id, p.full_name, p.phone, p.balance, p.created,
         (case when sp.others > 0 then 40 else 0 end) + (case when rb.id is not null then 35 else 0 end)
         + (case when fw.id is not null then 30 else 0 end) + (case when fl.id is not null then 30 else 0 end)
         + (case when rj.id is not null then 25 else 0 end) + (case when pw.id is not null then 20 else 0 end)
-        + (case when ws.id is not null then 40 else 0 end) + (case when ir.id is not null then 25 else 0 end) as score,
+        + (case when ws.id is not null then 40 else 0 end) + (case when ir.id is not null then 25 else 0 end)
+        + (case when si.id is not null then 20 else 0 end) as score,
         array_remove(array[
           case when sp.others > 0 then 'Même numéro que ' || sp.others || ' autre(s) compte(s)' end,
           case when rb.id is not null then rb.n || ' filleuls inscrits en 24 h' end,
@@ -626,7 +650,8 @@ begin
           case when rj.id is not null then rj.rej || ' preuves rejetées sur ' || rj.total end,
           case when pw.id is not null then pw.n || ' retraits en attente' end,
           case when ws.id is not null then 'Même numéro de paiement que d''autres comptes' end,
-          case when ir.id is not null then 'Filleuls sans aucune activité (' || ir.n || ' filleuls)' end
+          case when ir.id is not null then 'Filleuls sans aucune activité (' || ir.n || ' filleuls)' end,
+          case when si.id is not null then 'Même adresse IP que ' || (si.n - 1) || ' autre(s) compte(s)' end
         ], null) as reasons
       from prof p
       left join shared_phone sp on sp.id = p.id
@@ -637,6 +662,7 @@ begin
       left join pend_wd pw on pw.id = p.id
       left join wd_shared ws on ws.id = p.id
       left join idle_refs ir on ir.id = p.id
+      left join shared_ip si on si.id = p.id
     )
     select jsonb_agg(to_jsonb(s) order by s.score desc, s.created desc) from (
       select * from scored sc
@@ -646,6 +672,19 @@ begin
        limit greatest(1, least(coalesce(p_limit, 50), 200))
     ) s
   ), '[]'::jsonb);
+end;
+$$;
+
+create or replace function public.control_suspects(p_limit integer default 50)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public
+as $$
+begin
+  perform public.control_assert_admin();
+  return public.control_suspects_core(p_limit);
 end;
 $$;
 
@@ -689,6 +728,10 @@ begin
                              where key like 'feature\_off\_%' and key not like 'feature\_off\_reason\_%' and value = 'true'), '[]'::jsonb));
 end;
 $$;
+
+-- Fonctions internes : jamais appelables depuis l'app
+revoke all on function public.control_suspects_core(integer) from public, anon, authenticated;
+revoke all on function public.control_shared_ip_map()        from public, anon, authenticated;
 
 -- ─────────────────────────────────────────────────────────────────────
 -- 5) DROITS

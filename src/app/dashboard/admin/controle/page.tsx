@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { MoneyTab, WithdrawalsTab, AlertsTab, GrowthTab, CommsTab, ErrorsTab, srcLabel, type Ctx } from './extras'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type Tab = 'overview' | 'suspects' | 'users' | 'journal'
+type Tab = 'overview' | 'money' | 'withdrawals' | 'alerts' | 'suspects' | 'users' | 'growth' | 'comms' | 'errors' | 'journal'
 type ActionKind = 'restrict' | 'suspend' | 'block' | 'unban' | 'logout' | 'global'
 type Action = { kind: ActionKind; ids: string[]; feature?: string; label?: string }
 
@@ -57,6 +58,8 @@ export default function ControlTowerPage() {
   const router = useRouter()
 
   const [ready, setReady] = useState(false)
+  const [adminId, setAdminId] = useState('')
+  const [alertCount, setAlertCount] = useState(0)
   const [tab, setTab] = useState<Tab>('overview')
   const [version, setVersion] = useState(0)
   const [toast, setToast] = useState<{ text: string; ok: boolean } | null>(null)
@@ -107,6 +110,7 @@ export default function ControlTowerPage() {
       if (!session) return router.replace('/login')
       const { data: prof } = await supabase.from('profiles').select('role, is_admin').eq('id', session.user.id).single()
       if (!prof || (prof.role !== 'admin' && !prof.is_admin)) return router.replace('/dashboard')
+      setAdminId(session.user.id)
       setReady(true)
     })()
   }, [supabase, router])
@@ -130,6 +134,12 @@ export default function ControlTowerPage() {
       setFeed(f || [])
       setGlobals(g || {})
       setLastRefresh(new Date())
+      try {
+        const al = await rpc('control_alerts_list', { p_resolved: false })
+        setAlertCount(Array.isArray(al) ? al.length : 0)
+      } catch {
+        /* partie 2 non installée : pas de compteur */
+      }
     } catch (e) {
       flash((e as Error).message, false)
     }
@@ -245,6 +255,7 @@ export default function ControlTowerPage() {
       </div>
     )
 
+  const ctx: Ctx = { rpc, flash, openUser: setDrawerId, version, bump: () => setVersion((v) => v + 1), adminId }
   const o = overview || {}
   const Kpi = ({ label, value, sub, tone = 'slate' }: { label: string; value: string; sub?: string; tone?: string }) => (
     <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
@@ -301,8 +312,19 @@ export default function ControlTowerPage() {
             )}
           </div>
           <div className="flex gap-1 overflow-x-auto pb-2">
-            {([['overview', 'Vue d’ensemble'], ['suspects', `Suspects${suspects.length ? ` (${suspects.length})` : ''}`], ['users', 'Utilisateurs'], ['journal', 'Journal']] as [Tab, string][]).map(([id, label]) => (
-              <button key={id} onClick={() => setTab(id)} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold ${tab === id ? 'bg-slate-900 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{label}</button>
+            {([
+              ['overview', 'Vue d’ensemble'],
+              ['money', 'Argent'],
+              ['withdrawals', `Retraits${Number(overview?.withdrawals_pending) > 0 ? ` (${overview.withdrawals_pending})` : ''}`],
+              ['alerts', `Alertes${alertCount > 0 ? ` (${alertCount})` : ''}`],
+              ['suspects', `Suspects${suspects.length ? ` (${suspects.length})` : ''}`],
+              ['users', 'Utilisateurs'],
+              ['growth', 'Croissance'],
+              ['comms', 'Communication'],
+              ['errors', 'Erreurs'],
+              ['journal', 'Journal'],
+            ] as [Tab, string][]).map(([id, label]) => (
+              <button key={id} onClick={() => setTab(id)} className={`shrink-0 px-4 py-2 rounded-xl text-xs font-bold ${tab === id ? 'bg-slate-900 text-white' : id === 'alerts' && alertCount > 0 ? 'bg-red-50 border border-red-200 text-red-700' : 'bg-white border border-slate-200 text-slate-600'}`}>{label}</button>
             ))}
           </div>
         </div>
@@ -509,6 +531,14 @@ export default function ControlTowerPage() {
           </>
         )}
 
+        {/* ───────── ONGLETS PARTIE 2 ───────── */}
+        {tab === 'money' && <MoneyTab {...ctx} />}
+        {tab === 'withdrawals' && <WithdrawalsTab {...ctx} />}
+        {tab === 'alerts' && <AlertsTab {...ctx} />}
+        {tab === 'growth' && <GrowthTab {...ctx} />}
+        {tab === 'comms' && <CommsTab {...ctx} />}
+        {tab === 'errors' && <ErrorsTab {...ctx} />}
+
         {/* ───────── JOURNAL ───────── */}
         {tab === 'journal' && (
           <div className="bg-white border border-slate-200 rounded-2xl shadow-sm divide-y divide-slate-100">
@@ -540,6 +570,7 @@ export default function ControlTowerPage() {
 function UserDrawer({ id, version, rpc, onClose, onAction, onLift }: { id: string; version: number; rpc: (n: string, p?: Record<string, unknown>) => Promise<any>; onClose: () => void; onAction: (a: Action) => void; onLift: (id: string, feature: string) => void }) {
   const [u, setU] = useState<any>(null)
   const [err, setErr] = useState<string | null>(null)
+  const [ledger, setLedger] = useState<any[]>([])
 
   useEffect(() => {
     let cancelled = false
@@ -552,6 +583,14 @@ function UserDrawer({ id, version, rpc, onClose, onAction, onLift }: { id: strin
         }
       } catch (e) {
         if (!cancelled) setErr((e as Error).message)
+      }
+    })()
+    ;(async () => {
+      try {
+        const l = await rpc('control_user_ledger', { p_user_id: id, p_limit: 20 })
+        if (!cancelled) setLedger(Array.isArray(l) ? l : [])
+      } catch {
+        /* partie 2 non installée */
       }
     })()
     return () => {
@@ -650,6 +689,21 @@ function UserDrawer({ id, version, rpc, onClose, onAction, onLift }: { id: strin
                     <div key={i} className="flex justify-between p-3 text-xs">
                       <span className="font-bold text-slate-900">{fmt(w.amount)} F</span>
                       <span className="text-slate-500">{w.status} · {ago(w.created_at)}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {ledger.length > 0 && (
+              <>
+                <p className="text-xs font-black text-slate-500 uppercase mb-2">Mouvements de solde</p>
+                <div className="bg-white border border-slate-200 rounded-2xl divide-y divide-slate-100 mb-4">
+                  {ledger.map((e: any, i: number) => (
+                    <div key={i} className="flex items-center gap-2 p-3 text-xs">
+                      <span className={`font-black w-20 shrink-0 ${Number(e.delta) >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{Number(e.delta) >= 0 ? '+' : ''}{fmt(e.delta)} {e.kind === 'fcfa' ? 'F' : '🪙'}</span>
+                      <span className="flex-1 text-slate-700 truncate">{srcLabel(e.source)}</span>
+                      <span className="text-[10px] text-slate-400 shrink-0">{ago(e.created_at)}</span>
                     </div>
                   ))}
                 </div>
